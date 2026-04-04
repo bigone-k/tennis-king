@@ -321,7 +321,7 @@ export default function Notice3Content() {
                   </td>
                   <td className="py-2.5 md:py-3 px-3 md:px-4 text-center" colSpan={2}>
                     <span className="text-base md:text-lg font-bold text-indigo-700">
-                      55,000원 고정
+                      60,000원 고정
                     </span>
                   </td>
                 </tr>
@@ -364,7 +364,7 @@ export default function Notice3Content() {
                   월회비 1/N 정액제
                 </p>
                 <p className="text-xl md:text-2xl font-bold text-indigo-700">
-                  5.5만원
+                  6만원
                   <span className="text-sm font-normal text-indigo-400">
                     /월
                   </span>
