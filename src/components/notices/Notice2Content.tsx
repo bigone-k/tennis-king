@@ -1,10 +1,10 @@
 export default function Notice2Content() {
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 md:space-y-8">
       {/* 헤더 배너 */}
-      <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl p-6 text-white text-center">
+      <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl p-4 md:p-6 text-white text-center">
         <p className="text-sm font-medium mb-1 opacity-90">테왕사신기 클럽</p>
-        <h2 className="text-2xl font-bold mb-2">신규 회원 모집 안내</h2>
+        <h2 className="text-xl md:text-2xl font-bold mb-2">신규 회원 모집 안내</h2>
         <p className="text-sm opacity-80">
           함께 테니스를 즐길 새로운 멤버를 찾습니다
         </p>
@@ -16,7 +16,7 @@ export default function Notice2Content() {
           <span className="flex items-center justify-center w-8 h-8 rounded-full bg-green-100 text-green-700 font-bold text-sm">
             1
           </span>
-          <h3 className="text-lg font-bold text-gray-800">모집 방식</h3>
+          <h3 className="text-base md:text-lg font-bold text-gray-800">모집 방식</h3>
         </div>
 
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
@@ -56,7 +56,7 @@ export default function Notice2Content() {
           <span className="flex items-center justify-center w-8 h-8 rounded-full bg-blue-100 text-blue-700 font-bold text-sm">
             2
           </span>
-          <h3 className="text-lg font-bold text-gray-800">
+          <h3 className="text-base md:text-lg font-bold text-gray-800">
             신규 회원 클럽 참여 방식
           </h3>
         </div>
@@ -64,14 +64,14 @@ export default function Notice2Content() {
         {/* 프로세스 플로우 */}
         <div className="space-y-0">
           {/* Step 1 */}
-          <div className="flex items-start gap-4">
+          <div className="flex items-start gap-3 md:gap-4">
             <div className="flex flex-col items-center">
-              <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-sm shrink-0">
+              <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-xs md:text-sm shrink-0">
                 1
               </div>
               <div className="w-0.5 h-full bg-blue-200 min-h-[40px]"></div>
             </div>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-3 flex-1">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 md:p-4 mb-3 flex-1">
               <p className="font-semibold text-gray-800 mb-1">
                 게스트 참여 신청
               </p>
@@ -87,14 +87,14 @@ export default function Notice2Content() {
           </div>
 
           {/* Step 2 */}
-          <div className="flex items-start gap-4">
+          <div className="flex items-start gap-3 md:gap-4">
             <div className="flex flex-col items-center">
-              <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-sm shrink-0">
+              <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-xs md:text-sm shrink-0">
                 2
               </div>
               <div className="w-0.5 h-full bg-blue-200 min-h-[40px]"></div>
             </div>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-3 flex-1">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 md:p-4 mb-3 flex-1">
               <p className="font-semibold text-gray-800 mb-1">
                 게스트 참여비 납부
               </p>
@@ -109,13 +109,13 @@ export default function Notice2Content() {
           </div>
 
           {/* Step 3 */}
-          <div className="flex items-start gap-4">
+          <div className="flex items-start gap-3 md:gap-4">
             <div className="flex flex-col items-center">
-              <div className="w-10 h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-sm shrink-0">
+              <div className="w-8 h-8 md:w-10 md:h-10 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold text-xs md:text-sm shrink-0">
                 3
               </div>
             </div>
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex-1">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 md:p-4 flex-1">
               <p className="font-semibold text-gray-800 mb-1">
                 가입 여부 결정
               </p>
@@ -137,16 +137,16 @@ export default function Notice2Content() {
           <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-bold text-sm">
             3
           </span>
-          <h3 className="text-lg font-bold text-gray-800">
+          <h3 className="text-base md:text-lg font-bold text-gray-800">
             신규 회원 가입비
           </h3>
         </div>
 
-        <div className="bg-purple-50 border border-purple-200 rounded-xl p-5">
+        <div className="bg-purple-50 border border-purple-200 rounded-xl p-4 md:p-5">
           <div className="flex items-center justify-center mb-4">
             <div className="bg-purple-600 text-white rounded-lg px-6 py-3 text-center">
               <p className="text-xs opacity-80 mb-1">가입비</p>
-              <p className="text-2xl font-bold">10만원 ~ 15만원</p>
+              <p className="text-xl md:text-2xl font-bold">10만원 ~ 15만원</p>
             </div>
           </div>
 

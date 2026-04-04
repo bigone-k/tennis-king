@@ -34,12 +34,12 @@ export default async function NoticeDetailPage({
       >
         &larr; 목록으로
       </Link>
-      <h1 className="text-2xl font-bold mb-2">{notice.title}</h1>
+      <h1 className="text-xl md:text-2xl font-bold mb-2">{notice.title}</h1>
       <div className="flex gap-4 text-sm text-gray-500 mb-6">
         <span>{notice.date}</span>
         <span>{notice.author}</span>
       </div>
-      <div className="bg-white rounded-lg p-6 border border-gray-200 leading-relaxed">
+      <div className="bg-white rounded-lg p-4 md:p-6 border border-gray-200 leading-relaxed">
         {richContent[notice.id] ?? notice.content}
       </div>
     </div>

@@ -34,7 +34,7 @@ const colorMap: Record<string, { bg: string; border: string; iconBg: string; hov
 
 export default function RulesPage() {
   return (
-    <div className="max-w-2xl mx-auto">
+    <div className="max-w-2xl mx-auto px-2 md:px-0">
       <h1 className="text-2xl font-bold mb-2">회칙정보</h1>
       <p className="text-sm text-gray-500 mb-8">
         테왕사신기 클럽 운영에 관한 문서를 확인할 수 있습니다.
