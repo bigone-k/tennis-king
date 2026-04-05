@@ -3,8 +3,10 @@ import NoticeTable from "@/components/NoticeTable";
 
 export default function NoticesPage() {
   return (
-    <div>
-      <h1 className="text-2xl font-bold mb-6">공지사항</h1>
+    <div className="max-w-4xl mx-auto">
+      <h1 className="text-3xl font-extrabold tracking-tight text-gray-900 mb-8">
+        공지사항
+      </h1>
       <NoticeTable notices={notices} />
     </div>
   );

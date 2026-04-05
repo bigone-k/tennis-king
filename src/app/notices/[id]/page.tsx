@@ -27,19 +27,24 @@ export default async function NoticeDetailPage({
   }
 
   return (
-    <div>
+    <div className="max-w-4xl mx-auto">
       <Link
         href="/notices"
-        className="text-sm text-gray-500 hover:text-gray-700 mb-4 inline-block"
+        className="inline-flex items-center gap-1 text-sm text-gray-400 hover:text-emerald-600 transition-colors mb-6"
       >
-        &larr; 목록으로
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+        </svg>
+        목록으로
       </Link>
-      <h1 className="text-xl md:text-2xl font-bold mb-2">{notice.title}</h1>
-      <div className="flex gap-4 text-sm text-gray-500 mb-6">
+      <h1 className="text-2xl md:text-3xl font-extrabold tracking-tight text-gray-900 mb-2">
+        {notice.title}
+      </h1>
+      <div className="flex gap-4 text-sm text-gray-400 mb-8">
         <span>{notice.date}</span>
         <span>{notice.author}</span>
       </div>
-      <div className="bg-white rounded-lg p-4 md:p-6 border border-gray-200 leading-relaxed">
+      <div className="card p-5 md:p-8 leading-relaxed">
         {richContent[notice.id] ?? notice.content}
       </div>
     </div>
