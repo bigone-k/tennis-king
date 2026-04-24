@@ -26,6 +26,14 @@ const getWinner = (s?: MatchScore): Winner => {
 
 const STORAGE_KEY = "tennis-king:match-maker:v1";
 
+/* Dramatic overlay timing (ms). Sum of per-phase durations must equal OVERLAY_TOTAL_MS. */
+const PHASE_READY_MS = 550;
+const PHASE_SHUFFLE_MS = 1300;
+const PHASE_COUNTDOWN_MS = 1200; // 3, 2, 1 each 400ms
+const PHASE_FLASH_MS = 300;
+const OVERLAY_TOTAL_MS =
+  PHASE_READY_MS + PHASE_SHUFFLE_MS + PHASE_COUNTDOWN_MS + PHASE_FLASH_MS;
+
 interface PersistedState {
   guests: Player[];
   selectedIds: string[];
@@ -55,6 +63,7 @@ export default function MatchMakerPage() {
   const [guestName, setGuestName] = useState("");
   const [guestGender, setGuestGender] = useState<Gender>("M");
   const [hydrated, setHydrated] = useState(false);
+  const [showFinal, setShowFinal] = useState(false);
 
   /* --- localStorage hydration (on mount) ---
    *  Reads a snapshot from browser storage once after mount. Deferred via
@@ -179,7 +188,7 @@ export default function MatchMakerPage() {
       const result = generateBracket(selectedPlayers, gamesPerPlayer);
       setBracket(result);
       setIsGenerating(false);
-    }, 2200);
+    }, OVERLAY_TOTAL_MS);
   };
 
   return (
@@ -468,12 +477,28 @@ export default function MatchMakerPage() {
                     return next;
                   })
                 }
-                revealDelayMs={i * 140}
+                revealDelayMs={i * 200}
               />
             ))}
           </div>
 
-          <MatchSummary bracket={bracket} scores={scores} />
+          <MatchSummary ranked={computeRankings(bracket, scores)} />
+
+          <button
+            onClick={() => setShowFinal(true)}
+            className="relative w-full py-5 rounded-2xl overflow-hidden font-black text-base tracking-wider text-white shadow-lg active:scale-[0.98] transition-transform mt-2"
+            style={{
+              background:
+                "linear-gradient(120deg, #b45309 0%, #f59e0b 35%, #fbbf24 60%, #f59e0b 100%)",
+            }}
+          >
+            <span className="relative z-10 flex items-center justify-center gap-2">
+              <span className="text-xl">🏁</span>
+              경기 종료 · 최종 순위 발표
+              <span className="text-xl">🏆</span>
+            </span>
+            <span className="absolute inset-y-0 w-1/3 bg-gradient-to-r from-transparent via-white/50 to-transparent animate-shine pointer-events-none" />
+          </button>
         </section>
       )}
 
@@ -485,6 +510,12 @@ export default function MatchMakerPage() {
       )}
 
       {isGenerating && <GenerationOverlay players={selectedPlayers} />}
+      {showFinal && bracket && (
+        <FinalRankingModal
+          ranked={computeRankings(bracket, scores)}
+          onClose={() => setShowFinal(false)}
+        />
+      )}
     </div>
   );
 }
@@ -515,7 +546,7 @@ function MatchCard({
 
   return (
     <div
-      className="card p-4 animate-match-reveal"
+      className="card p-4 animate-match-slam"
       style={{ animationDelay: `${revealDelayMs}ms` }}
     >
       <div className="flex items-center justify-between mb-3">
@@ -663,21 +694,19 @@ function TeamPanel({
   );
 }
 
-function MatchSummary({
-  bracket,
-  scores,
-}: {
-  bracket: BracketResult;
-  scores: Record<number, MatchScore>;
-}) {
-  interface Tally {
-    name: string;
-    wins: number;
-    losses: number;
-    pointsFor: number;
-    pointsAgainst: number;
-  }
-  const tallies: Record<string, Tally> = {};
+interface Ranking {
+  name: string;
+  wins: number;
+  losses: number;
+  pointsFor: number;
+  pointsAgainst: number;
+}
+
+const computeRankings = (
+  bracket: BracketResult,
+  scores: Record<number, MatchScore>,
+): Ranking[] => {
+  const tallies: Record<string, Ranking> = {};
   const init = (p: Player) => {
     tallies[p.id] ??= {
       name: p.name,
@@ -712,7 +741,7 @@ function MatchSummary({
     for (const p of loseTeam) tallies[p.id].losses += 1;
   }
 
-  const ranked = Object.values(tallies).sort((a, b) => {
+  return Object.values(tallies).sort((a, b) => {
     // 1) 득실차 높은 순
     const pdA = a.pointsFor - a.pointsAgainst;
     const pdB = b.pointsFor - b.pointsAgainst;
@@ -726,7 +755,9 @@ function MatchSummary({
       b.pointsFor + b.pointsAgainst - (a.pointsFor + a.pointsAgainst)
     );
   });
+};
 
+function MatchSummary({ ranked }: { ranked: Ranking[] }) {
   return (
     <div className="card p-4 mt-6">
       <div className="flex items-baseline justify-between mb-3">
@@ -782,59 +813,530 @@ function MatchSummary({
   );
 }
 
-function GenerationOverlay({ players }: { players: Player[] }) {
-  const [showing, setShowing] = useState<Player[]>(() => players.slice(0, 4));
+type OverlayPhase = "ready" | "shuffle" | "countdown" | "flash";
 
+function GenerationOverlay({ players }: { players: Player[] }) {
+  const [phase, setPhase] = useState<OverlayPhase>("ready");
+  const [count, setCount] = useState(3);
+  const [showing, setShowing] = useState<Player[]>(() => players.slice(0, 6));
+
+  // Ball trajectories (set once, stable across renders)
+  const [ballSlots] = useState(() =>
+    Array.from({ length: 10 }, () => ({
+      top: 8 + Math.random() * 78,
+      left: 4 + Math.random() * 88,
+      size: 24 + Math.random() * 22,
+      delay: -Math.random() * 1.2,
+      duration: 1.4 + Math.random() * 1.2,
+    })),
+  );
+
+  // Phase timeline
   useEffect(() => {
-    const pickFour = () => {
+    const timers: number[] = [];
+    timers.push(
+      window.setTimeout(() => setPhase("shuffle"), PHASE_READY_MS),
+      window.setTimeout(
+        () => setPhase("countdown"),
+        PHASE_READY_MS + PHASE_SHUFFLE_MS,
+      ),
+      window.setTimeout(
+        () => setCount(2),
+        PHASE_READY_MS + PHASE_SHUFFLE_MS + 400,
+      ),
+      window.setTimeout(
+        () => setCount(1),
+        PHASE_READY_MS + PHASE_SHUFFLE_MS + 800,
+      ),
+      window.setTimeout(
+        () => setPhase("flash"),
+        PHASE_READY_MS + PHASE_SHUFFLE_MS + PHASE_COUNTDOWN_MS,
+      ),
+    );
+    return () => timers.forEach((id) => window.clearTimeout(id));
+  }, []);
+
+  // Name shuffle during shuffle phase
+  useEffect(() => {
+    if (phase !== "shuffle") return;
+    const pickSome = () => {
       const pool = [...players];
       for (let i = pool.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [pool[i], pool[j]] = [pool[j], pool[i]];
       }
-      return pool.slice(0, 4);
+      return pool.slice(0, Math.min(6, pool.length));
     };
-    const id = window.setInterval(() => setShowing(pickFour()), 140);
+    const id = window.setInterval(() => setShowing(pickSome()), 110);
     return () => window.clearInterval(id);
-  }, [players]);
+  }, [phase, players]);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-md animate-overlay-fade">
-      <div className="text-center px-6">
-        <div className="relative inline-block mb-6">
-          <span className="block text-7xl animate-ball-spin">🎾</span>
-          <span className="absolute inset-0 text-7xl animate-ball-ping">
+    <div className="fixed inset-0 z-[100] overflow-hidden animate-overlay-fade">
+      {/* Dark backdrop */}
+      <div className="absolute inset-0 bg-black/85 backdrop-blur-md" />
+
+      {/* Animated grid */}
+      <div
+        className="absolute inset-0 opacity-[0.12] animate-grid-scroll"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(16,185,129,0.7) 1px, transparent 1px), linear-gradient(90deg, rgba(16,185,129,0.7) 1px, transparent 1px)",
+          backgroundSize: "80px 80px",
+        }}
+      />
+
+      {/* Radial green glow behind content */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(circle at 50% 50%, rgba(16,185,129,0.25) 0%, transparent 55%)",
+        }}
+      />
+
+      {/* Flying tennis balls during shuffle */}
+      {phase === "shuffle" &&
+        ballSlots.map((s, i) => (
+          <span
+            key={i}
+            className="absolute animate-ball-fly"
+            style={{
+              top: `${s.top}%`,
+              left: `${s.left}%`,
+              fontSize: `${s.size}px`,
+              animationDuration: `${s.duration}s`,
+              animationDelay: `${s.delay}s`,
+            }}
+          >
             🎾
           </span>
-        </div>
+        ))}
 
-        <h3 className="text-4xl font-black text-lime-300 tracking-widest mb-2 animate-title-glow">
-          DRAWING...
-        </h3>
-        <p className="text-sm text-emerald-200/80 mb-8 tracking-wider">
-          공정한 대진표를 추첨 중입니다
-        </p>
-
-        <div className="flex flex-wrap gap-2 justify-center max-w-md mx-auto">
-          {showing.map((p, i) => (
+      {/* Phase content */}
+      <div className="relative h-full flex items-center justify-center px-6">
+        {phase === "ready" && (
+          <div className="text-center">
             <div
-              key={`${p.id}-${i}`}
-              className="animate-name-slot px-4 py-2 rounded-lg border border-emerald-400/40 bg-emerald-600/20 text-white text-sm font-bold"
+              className="text-7xl sm:text-8xl font-black text-lime-300 animate-ready-zoom tracking-[0.2em]"
+              style={{
+                textShadow:
+                  "0 0 32px rgba(163,230,53,0.8), 0 0 72px rgba(16,185,129,0.6)",
+              }}
             >
-              {p.name}
+              READY?
             </div>
-          ))}
-        </div>
+          </div>
+        )}
 
-        <div className="mt-8 flex justify-center gap-1">
-          {[0, 1, 2].map((i) => (
+        {phase === "shuffle" && (
+          <div className="text-center relative">
+            <div className="relative inline-block mb-6">
+              <span className="block text-7xl animate-ball-spin">🎾</span>
+              <span className="absolute inset-0 text-7xl animate-ball-ping">
+                🎾
+              </span>
+            </div>
+            <h3 className="text-3xl sm:text-4xl font-black text-lime-300 tracking-[0.25em] mb-2 animate-title-glow">
+              SHUFFLING
+            </h3>
+            <p className="text-xs sm:text-sm text-emerald-200/80 mb-6 tracking-widest">
+              공정한 매치업을 추첨 중입니다
+            </p>
+            <div className="flex flex-wrap gap-2 justify-center max-w-md mx-auto">
+              {showing.map((p, i) => (
+                <div
+                  key={`${p.id}-${i}`}
+                  className="animate-name-slot px-4 py-2 rounded-lg border border-emerald-400/50 bg-emerald-600/25 text-white text-sm font-bold shadow-lg shadow-emerald-500/20"
+                >
+                  {p.name}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {phase === "countdown" && (
+          <div className="text-center relative">
+            {/* Side lightning */}
             <span
-              key={i}
-              className="w-2 h-2 rounded-full bg-lime-300 animate-ball-ping"
-              style={{ animationDelay: `${i * 0.2}s` }}
+              className="absolute top-1/2 -translate-y-1/2 -left-20 sm:-left-32 text-6xl sm:text-7xl text-yellow-300 animate-lightning"
+              style={{ filter: "drop-shadow(0 0 18px rgba(250,204,21,0.9))" }}
+            >
+              ⚡
+            </span>
+            <span
+              className="absolute top-1/2 -translate-y-1/2 -right-20 sm:-right-32 text-6xl sm:text-7xl text-yellow-300 animate-lightning"
+              style={{
+                animationDelay: "0.3s",
+                filter: "drop-shadow(0 0 18px rgba(250,204,21,0.9))",
+              }}
+            >
+              ⚡
+            </span>
+
+            <div
+              key={count}
+              className="font-black text-lime-300 leading-none animate-countdown-pop"
+              style={{
+                fontSize: "clamp(8rem, 28vw, 16rem)",
+                textShadow:
+                  "0 0 48px rgba(132,204,22,0.95), 0 0 120px rgba(16,185,129,0.75)",
+              }}
+            >
+              {count}
+            </div>
+            <p className="text-lg sm:text-xl text-emerald-200/90 mt-4 font-black tracking-[0.35em]">
+              GET READY!
+            </p>
+          </div>
+        )}
+
+        {phase === "flash" && (
+          <div className="absolute inset-0 bg-white animate-white-flash" />
+        )}
+      </div>
+
+      {/* Progress bar */}
+      <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-black/60">
+        <div
+          className="h-full bg-gradient-to-r from-emerald-400 via-lime-300 to-emerald-400 animate-progress-fill"
+          style={{ animationDuration: `${OVERLAY_TOTAL_MS}ms` }}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Final Ranking Ceremony Modal ---------- */
+
+interface ConfettiPiece {
+  id: number;
+  left: number;
+  delay: number;
+  duration: number;
+  size: number;
+  color: string;
+}
+
+const CONFETTI_COLORS = [
+  "#fbbf24", // gold
+  "#e5e7eb", // silver
+  "#fb923c", // bronze
+  "#10b981", // emerald
+  "#a3e635", // lime
+  "#60a5fa", // blue
+  "#f472b6", // pink
+];
+
+function FinalRankingModal({
+  ranked,
+  onClose,
+}: {
+  ranked: Ranking[];
+  onClose: () => void;
+}) {
+  // Reveal step:
+  //  0 = intro title only
+  //  1 = 4+ 위 rest list slides in
+  //  2 = 3rd place podium rises
+  //  3 = 2nd place podium rises
+  //  4 = 1st place podium + trophy + confetti
+  //  5 = idle
+  const [step, setStep] = useState(0);
+
+  const [confetti] = useState<ConfettiPiece[]>(() =>
+    Array.from({ length: 60 }, (_, i) => ({
+      id: i,
+      left: Math.random() * 100,
+      delay: Math.random() * 2,
+      duration: 2.2 + Math.random() * 2.8,
+      size: 6 + Math.random() * 8,
+      color:
+        CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+    })),
+  );
+
+  useEffect(() => {
+    const timers: number[] = [
+      window.setTimeout(() => setStep(1), 825),
+      window.setTimeout(() => setStep(2), 2700),
+      window.setTimeout(() => setStep(3), 4050),
+      window.setTimeout(() => setStep(4), 5550),
+      window.setTimeout(() => setStep(5), 8250),
+    ];
+    return () => timers.forEach((id) => window.clearTimeout(id));
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const first = ranked[0];
+  const second = ranked[1];
+  const third = ranked[2];
+  const rest = ranked.slice(3);
+
+  return (
+    <div
+      className="fixed inset-0 z-[150] flex items-start sm:items-center justify-center p-4 overflow-y-auto animate-overlay-fade"
+      role="dialog"
+      aria-modal="true"
+    >
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/85 backdrop-blur-md"
+        onClick={onClose}
+      />
+
+      {/* Confetti (only once 1st place revealed) */}
+      {step >= 4 && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          {confetti.map((c) => (
+            <span
+              key={c.id}
+              className="absolute top-0 animate-confetti-fall"
+              style={{
+                left: `${c.left}%`,
+                width: `${c.size}px`,
+                height: `${c.size * 0.4}px`,
+                background: c.color,
+                animationDelay: `${c.delay}s`,
+                animationDuration: `${c.duration}s`,
+                borderRadius: "1px",
+              }}
             />
           ))}
         </div>
+      )}
+
+      {/* Modal content */}
+      <div
+        className="relative w-full max-w-2xl bg-gradient-to-b from-slate-900 via-emerald-950 to-slate-900 rounded-3xl shadow-2xl border border-emerald-400/20 p-6 sm:p-8 animate-modal-pop my-auto"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-lg transition-colors z-10"
+          aria-label="닫기"
+        >
+          ✕
+        </button>
+
+        {/* Title */}
+        <div className="text-center mb-6">
+          <div
+            className="text-3xl sm:text-5xl font-black text-amber-300 tracking-[0.15em] animate-final-title"
+            style={{
+              textShadow:
+                "0 0 24px rgba(251,191,36,0.8), 0 0 60px rgba(251,191,36,0.4)",
+            }}
+          >
+            🏆 FINAL RANKING 🏆
+          </div>
+          <p className="text-xs sm:text-sm text-emerald-200/70 mt-2 tracking-widest">
+            경기 종료 · 최종 순위 발표
+          </p>
+        </div>
+
+        {/* Podium (top 3) */}
+        {(first || second || third) && (
+          <div className="grid grid-cols-3 gap-2 sm:gap-4 items-end max-w-lg mx-auto mb-8 min-h-[260px]">
+            {/* 2nd — left column */}
+            <div style={{ gridColumn: 1 }} className="text-center">
+              {second && step >= 3 && (
+                <PodiumSlot
+                  entry={second}
+                  rank={2}
+                  heightClass="h-20 sm:h-28"
+                />
+              )}
+            </div>
+
+            {/* 1st — center column */}
+            <div style={{ gridColumn: 2 }} className="text-center relative">
+              {first && step >= 4 && (
+                <>
+                  <PodiumSlot
+                    entry={first}
+                    rank={1}
+                    heightClass="h-32 sm:h-40"
+                  />
+                  {/* Sparkles */}
+                  <span
+                    className="absolute top-0 left-0 text-xl animate-sparkle"
+                    style={{ animationDelay: "0.2s" }}
+                  >
+                    ✨
+                  </span>
+                  <span
+                    className="absolute top-8 right-2 text-lg animate-sparkle"
+                    style={{ animationDelay: "0.6s" }}
+                  >
+                    ✨
+                  </span>
+                  <span
+                    className="absolute -top-4 left-1/2 text-2xl animate-sparkle"
+                    style={{ animationDelay: "0.9s" }}
+                  >
+                    ✨
+                  </span>
+                </>
+              )}
+            </div>
+
+            {/* 3rd — right column */}
+            <div style={{ gridColumn: 3 }} className="text-center">
+              {third && step >= 2 && (
+                <PodiumSlot
+                  entry={third}
+                  rank={3}
+                  heightClass="h-14 sm:h-20"
+                />
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* 4th+ rest list */}
+        {rest.length > 0 && (
+          <div className="space-y-2 max-w-md mx-auto">
+            <p className="text-[10px] text-emerald-200/50 tracking-widest text-center mb-2">
+              ─── OTHERS ───
+            </p>
+            {step >= 1 &&
+              rest.map((r, i) => {
+                const diff = r.pointsFor - r.pointsAgainst;
+                return (
+                  <div
+                    key={r.name}
+                    className="flex items-center justify-between px-4 py-2.5 rounded-lg bg-white/5 border border-white/10 animate-rank-slide"
+                    style={{ animationDelay: `${i * 180}ms` }}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className="text-xs font-black text-emerald-300/60 w-9 shrink-0 whitespace-nowrap tabular-nums">
+                        {i + 4}위
+                      </span>
+                      <span className="font-bold text-white truncate">
+                        {r.name}
+                      </span>
+                    </div>
+                    <span className="text-xs text-white/60 tabular-nums">
+                      <b className="text-emerald-300">{r.wins}</b>승{" "}
+                      <b className="text-white/50">{r.losses}</b>패 ·{" "}
+                      <b>{r.pointsFor}</b>-<b>{r.pointsAgainst}</b>{" "}
+                      <span
+                        className={
+                          diff > 0
+                            ? "text-emerald-300"
+                            : diff < 0
+                              ? "text-red-300"
+                              : "text-white/40"
+                        }
+                      >
+                        ({diff > 0 ? "+" : ""}
+                        {diff})
+                      </span>
+                    </span>
+                  </div>
+                );
+              })}
+          </div>
+        )}
+
+        {/* Footer close */}
+        <div className="mt-8 flex justify-center">
+          <button
+            onClick={onClose}
+            className="px-8 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-bold transition-colors border border-white/20"
+          >
+            닫기
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PodiumSlot({
+  entry,
+  rank,
+  heightClass,
+}: {
+  entry: Ranking;
+  rank: 1 | 2 | 3;
+  heightClass: string;
+}) {
+  const config = {
+    1: {
+      medal: "🏆",
+      color: "from-amber-300 via-amber-400 to-amber-600",
+      text: "text-amber-300",
+      num: "1",
+      medalCls: "animate-trophy-drop text-5xl sm:text-7xl",
+      blockCls: "animate-gold-glow",
+      rankTag: "CHAMPION",
+    },
+    2: {
+      medal: "🥈",
+      color: "from-gray-200 via-gray-300 to-gray-500",
+      text: "text-gray-200",
+      num: "2",
+      medalCls: "text-4xl sm:text-6xl",
+      blockCls: "",
+      rankTag: "2위",
+    },
+    3: {
+      medal: "🥉",
+      color: "from-orange-300 via-orange-400 to-orange-600",
+      text: "text-orange-300",
+      num: "3",
+      medalCls: "text-3xl sm:text-5xl",
+      blockCls: "",
+      rankTag: "3위",
+    },
+  }[rank];
+
+  const diff = entry.pointsFor - entry.pointsAgainst;
+
+  return (
+    <div className="relative animate-podium-rise flex flex-col items-center">
+      <div className={`${config.medalCls} mb-1`}>{config.medal}</div>
+      <p className={`text-[10px] font-black tracking-widest ${config.text}`}>
+        {config.rankTag}
+      </p>
+      <p
+        className={`font-black truncate max-w-full ${
+          rank === 1 ? "text-xl sm:text-2xl" : "text-base sm:text-lg"
+        } text-white`}
+      >
+        {entry.name}
+      </p>
+      <p className="text-[10px] sm:text-xs text-white/60 tabular-nums mt-0.5">
+        {entry.wins}승 {entry.losses}패 · {entry.pointsFor}-
+        {entry.pointsAgainst} ({diff > 0 ? "+" : ""}
+        {diff})
+      </p>
+      <div
+        className={`${heightClass} ${config.blockCls} mt-2 w-full rounded-t-xl bg-gradient-to-b ${config.color} shadow-xl flex items-start justify-center pt-2 sm:pt-3`}
+      >
+        <span
+          className={`font-black ${
+            rank === 1
+              ? "text-4xl sm:text-5xl"
+              : rank === 2
+                ? "text-3xl sm:text-4xl"
+                : "text-2xl sm:text-3xl"
+          } text-white/90`}
+          style={{ textShadow: "0 2px 8px rgba(0,0,0,0.3)" }}
+        >
+          {config.num}
+        </span>
       </div>
     </div>
   );
