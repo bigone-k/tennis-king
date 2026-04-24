@@ -8,6 +8,7 @@ const menuItems = [
   { href: "/notices", label: "공지사항", icon: "📋" },
   { href: "/members", label: "회원명단", icon: "👥" },
   { href: "/rules", label: "회칙정보", icon: "📑" },
+  { href: "/tools", label: "유용한기능", icon: "🛠️" },
 ];
 
 export default function Sidebar() {

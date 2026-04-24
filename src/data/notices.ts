@@ -9,9 +9,9 @@ export interface Notice {
 export const notices: Notice[] = [
   {
     id: 1,
-    title: "4월 25일 테니스 MT",
+    title: "4월 25일 테니스 MT 안내",
     content:
-      "4월 25일에 테니스 MT가 예정되어 있습니다. 자세한 일정은 추후 공지됩니다.",
+      "4월 25일 테니스 MT 진행 방식과 사은품, 게임 규칙을 안내드립니다.",
     date: "2026-02-19",
     author: "관리자",
   },

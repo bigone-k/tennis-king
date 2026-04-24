@@ -2,10 +2,12 @@ import { notices, getNoticeById } from "@/data/notices";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import type { ReactNode } from "react";
+import Notice1Content from "@/components/notices/Notice1Content";
 import Notice2Content from "@/components/notices/Notice2Content";
 import Notice3Content from "@/components/notices/Notice3Content";
 
 const richContent: Record<number, ReactNode> = {
+  1: <Notice1Content />,
   2: <Notice2Content />,
   3: <Notice3Content />,
 };
