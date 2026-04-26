@@ -31,6 +31,14 @@ export const notices: Notice[] = [
     date: "2026-04-04",
     author: "관리자",
   },
+  {
+    id: 4,
+    title: "[공지] 회비 및 정산 변경안 안내 (5월 1일 시행)",
+    content:
+      "5월 회비부터 입회비 10만원 신설 및 월회비 6만원(게임비·캔볼 포함) 정액제로 변경됩니다. 자동이체 변경 부탁드립니다.",
+    date: "2026-04-26",
+    author: "관리자",
+  },
 ];
 
 export function getNoticeById(id: number): Notice | undefined {
