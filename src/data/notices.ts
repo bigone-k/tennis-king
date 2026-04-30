@@ -39,6 +39,14 @@ export const notices: Notice[] = [
     date: "2026-04-26",
     author: "관리자",
   },
+  {
+    id: 5,
+    title: "[제안] 테니스 클럽 이름 후보군 정리",
+    content:
+      "클럽 이름 후보 12개를 정리했습니다. 의미와 활용 방안을 함께 검토해 주세요.",
+    date: "2026-04-30",
+    author: "관리자",
+  },
 ];
 
 export function getNoticeById(id: number): Notice | undefined {

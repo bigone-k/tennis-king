@@ -24,9 +24,9 @@ export default function NoticeTable({ notices }: { notices: Notice[] }) {
                 </p>
               </div>
             </div>
-            <div className="hidden md:flex items-center gap-6 shrink-0 text-xs text-gray-400">
-              <span>{notice.date}</span>
-              <span>{notice.author}</span>
+            <div className="hidden md:flex items-center shrink-0 text-xs text-gray-400">
+              <span className="w-24 text-right tabular-nums">{notice.date}</span>
+              <span className="w-16 text-right">{notice.author}</span>
             </div>
             <svg
               className="w-4 h-4 text-gray-300 shrink-0"
