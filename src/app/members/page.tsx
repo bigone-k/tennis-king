@@ -1,4 +1,4 @@
-import { members } from "@/data/members";
+import { members } from "@/lib/data/members";
 
 export default function MembersPage() {
   const maleCount = members.filter((m) => m.gender === "M").length;

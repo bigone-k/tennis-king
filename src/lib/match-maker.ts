@@ -1,4 +1,4 @@
-import type { Gender } from "@/data/members";
+import type { Gender } from "@/lib/data/members";
 
 export interface Player {
   id: string;

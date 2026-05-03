@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
@@ -38,8 +39,18 @@ export default function Sidebar() {
     <>
       {/* 모바일 상단 헤더 */}
       <header className="md:hidden fixed top-0 left-0 right-0 z-40 bg-emerald-900 text-white flex items-center justify-between px-4 h-14 shadow-lg">
-        <Link href="/" className="text-lg font-extrabold tracking-tight">
-          🎾 테왕사신기
+        <Link href="/" className="flex items-center gap-2 text-lg font-extrabold tracking-tight">
+          <span className="relative block w-7 h-7 overflow-hidden rounded-md bg-white">
+            <Image
+              src="/noad_logo.png"
+              alt="NoAD"
+              fill
+              sizes="28px"
+              className="object-cover"
+              preload
+            />
+          </span>
+          NoAD
         </Link>
         <button
           onClick={() => setIsOpen(!isOpen)}
@@ -92,9 +103,18 @@ export default function Sidebar() {
       <aside className="hidden md:flex w-56 bg-emerald-900 min-h-screen flex-col shrink-0">
         <div className="px-5 py-8">
           <Link href="/" className="block">
-            <span className="text-2xl">🎾</span>
-            <p className="text-white text-xl font-extrabold tracking-tight mt-1">
-              테왕사신기
+            <span className="relative block w-14 h-14 overflow-hidden rounded-xl bg-white">
+              <Image
+                src="/noad_logo.png"
+                alt="NoAD"
+                fill
+                sizes="56px"
+                className="object-cover"
+                preload
+              />
+            </span>
+            <p className="text-white text-xl font-extrabold tracking-tight mt-3">
+              NoAD
             </p>
             <p className="text-white/40 text-xs mt-0.5">Tennis Club</p>
           </Link>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { members, type Gender } from "@/data/members";
+import { members, type Gender } from "@/lib/data/members";
 import {
   adjustGamesPerPlayer,
   generateBracket,

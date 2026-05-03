@@ -4,7 +4,7 @@ export default function Notice2Content() {
       {/* 헤더 배너 */}
       <div className="bg-emerald-900 rounded-2xl p-6 md:p-8 text-white text-center">
         <p className="text-xs font-medium mb-2 text-emerald-300 uppercase tracking-widest">
-          테왕사신기 클럽
+          NoAD 클럽
         </p>
         <h2 className="text-xl md:text-2xl font-extrabold tracking-tight">
           신규 회원 모집 안내

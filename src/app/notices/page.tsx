@@ -1,4 +1,4 @@
-import { notices } from "@/data/notices";
+import { notices } from "@/lib/data/notices";
 import NoticeTable from "@/components/NoticeTable";
 
 export default function NoticesPage() {

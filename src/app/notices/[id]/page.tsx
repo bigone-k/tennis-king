@@ -1,4 +1,4 @@
-import { notices, getNoticeById } from "@/data/notices";
+import { notices, getNoticeById } from "@/lib/data/notices";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import type { ReactNode } from "react";

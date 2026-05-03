@@ -227,7 +227,7 @@ export default function Notice3Content() {
               ))}
               <div className="bg-emerald-50 rounded-lg p-3 mt-2">
                 <p className="text-sm text-emerald-700 font-bold">
-                  → 테왕사신기는 이 조건에 충족됩니다.
+                  → NoAD는 이 조건에 충족됩니다.
                 </p>
               </div>
             </div>

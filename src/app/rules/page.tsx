@@ -3,7 +3,7 @@ import Link from "next/link";
 const links = [
   {
     title: "회칙정보",
-    description: "테왕사신기 클럽 운영 규칙 및 회칙 전문",
+    description: "NoAD 클럽 운영 규칙 및 회칙 전문",
     href: "https://docs.google.com/document/d/1X04HC_6oJI-9n8SHEVc4dG0mXa_fkQiZsgTugPKWSXI/edit?tab=t.0#heading=h.svcj8lwqrlaa",
     icon: "📜",
   },
@@ -22,7 +22,7 @@ export default function RulesPage() {
         회칙정보
       </h1>
       <p className="text-sm text-gray-400 mb-8">
-        테왕사신기 클럽 운영에 관한 문서를 확인할 수 있습니다.
+        NoAD 클럽 운영에 관한 문서를 확인할 수 있습니다.
       </p>
 
       <div className="space-y-3">

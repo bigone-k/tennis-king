@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { Notice } from "@/data/notices";
+import type { Notice } from "@/lib/data/notices";
 
 export default function NoticeTable({ notices }: { notices: Notice[] }) {
   return (

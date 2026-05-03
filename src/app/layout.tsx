@@ -10,8 +10,8 @@ const notoSansKR = Noto_Sans_KR({
 });
 
 export const metadata: Metadata = {
-  title: "테왕사신기",
-  description: "테왕사신기 공식 웹사이트",
+  title: "NoAD",
+  description: "NoAD 테니스 클럽 공식 웹사이트",
 };
 
 export default function RootLayout({
