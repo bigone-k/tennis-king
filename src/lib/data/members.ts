@@ -19,4 +19,5 @@ export const members: Member[] = [
   { no: 9, name: "이주영", gender: "F", ntrp: "?" },
   { no: 10, name: "류호정", gender: "M", ntrp: "?" },
   { no: 11, name: "이덕수", gender: "M", ntrp: "?" },
+  { no: 12, name: "송성헌", gender: "M", ntrp: "?" },
 ];
