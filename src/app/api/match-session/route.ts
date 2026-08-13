@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { hasValidSession } from "@/lib/auth/session";
 import { members } from "@/lib/data/members";
-import { generateBracket, type Player } from "@/lib/match-maker";
+import { generateBracket, parseNtrp, type Player } from "@/lib/match-maker";
 import {
   emptySession,
   isInvalidPayload,
@@ -110,6 +110,7 @@ export async function POST(request: Request) {
         id: `m-${m.no}`,
         name: m.name,
         gender: m.gender,
+        ntrp: parseNtrp(m.ntrp),
       })),
       ...current.guests,
     ];

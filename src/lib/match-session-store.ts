@@ -2,6 +2,7 @@ import { redisDel, redisEval, redisGet } from "./redis";
 import {
   REDIS_KEY,
   emptySession,
+  parseMatchSessionData,
   type MatchSession,
   type MatchSessionData,
 } from "./match-session";
@@ -41,7 +42,11 @@ export const readSession = async (): Promise<MatchSession> => {
   if (!raw) return emptySession();
 
   try {
-    return JSON.parse(raw) as MatchSession;
+    const stored = JSON.parse(raw) as MatchSession;
+    // Run stored data through the same parser as an incoming write. A session
+    // saved before a field existed (NTRP ratings) is filled in with defaults
+    // here, so an in-progress bracket keeps working across a deploy.
+    return { ...stored, ...parseMatchSessionData(stored) };
   } catch {
     // Surface it — silently serving a blank session would look like data loss
     // with no explanation. Clients recover by writing over version 0.

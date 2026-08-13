@@ -1,11 +1,29 @@
 import type { Gender } from "@/lib/data/members";
 
+/** Selectable NTRP range for guests: 1.0 ~ 3.5 in 0.5 steps. */
+export const NTRP_MIN = 1.0;
+export const NTRP_MAX = 3.5;
+export const NTRP_OPTIONS = [1.0, 1.5, 2.0, 2.5, 3.0, 3.5] as const;
+
+/** Used when a rating is unknown ("?" in the member list) or predates this field. */
+export const DEFAULT_NTRP = 2.0;
+
+/** Member ratings are stored as text ("2.5", "?"). Unknown falls back to the default. */
+export const parseNtrp = (value: string): number => {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= NTRP_MIN && n <= NTRP_MAX ? n : DEFAULT_NTRP;
+};
+
 export interface Player {
   id: string;
   name: string;
   gender: Gender;
+  ntrp: number;
   isGuest?: boolean;
 }
+
+export const teamNtrp = (players: readonly Player[]): number =>
+  players.reduce((sum, p) => sum + p.ntrp, 0);
 
 export interface Team {
   players: [Player, Player];
@@ -29,6 +47,12 @@ interface PickContext {
   playCount: Map<string, number>;
   recentMatchOfPlayer: Map<string, number>;
   matchIndex: number;
+  /**
+   * Fewest women this match must include. Banning all-female teams caps a
+   * match at 2 women, so leaving too many for later makes the last matches
+   * unplayable — this keeps them being used up fast enough.
+   */
+  minFemales: number;
 }
 
 const pairKey = (a: Player, b: Player): string => {
@@ -82,9 +106,22 @@ const isFemaleOnly = (pair: [Player, Player]): boolean =>
   pair[0].gender === "F" && pair[1].gender === "F";
 
 /**
+ * Penalty weights, ordered by priority. A repeated teammate pairing always
+ * outranks an NTRP imbalance, and NTRP balance in turn outranks pure rotation.
+ * Both NTRP terms are expressed per 1.0 of rating.
+ */
+const WEIGHT_TEAMMATE_REPEAT = 1000;
+/** |team A rating sum − team B rating sum| — the "even teams" goal. */
+const WEIGHT_TEAM_GAP = 200;
+/** (max − min) across the 4 players — keeps a 3.5 from carrying a 1.0. */
+const WEIGHT_MATCH_SPREAD = 20;
+const WEIGHT_RECENCY = 10;
+
+/**
  * Score a candidate match. Lower is better.
- * Heavy penalty for repeated teammate pairings; small penalty for skipping
- * higher-priority players (those who have played fewer games).
+ * Heavy penalty for repeated teammate pairings; NTRP penalties for uneven
+ * teams and wide skill gaps; small penalty for skipping higher-priority
+ * players (those who have played fewer games).
  */
 const scoreCandidate = (
   teamA: [Player, Player],
@@ -95,9 +132,16 @@ const scoreCandidate = (
   const teamateRepeatA = ctx.teammateCount.get(pairKey(teamA[0], teamA[1])) ?? 0;
   const teamateRepeatB = ctx.teammateCount.get(pairKey(teamB[0], teamB[1])) ?? 0;
 
+  const four = [...teamA, ...teamB];
+
+  // Equal sums are rarely possible, so this is a cost to minimise, not a filter.
+  const teamGap = Math.abs(teamNtrp(teamA) - teamNtrp(teamB));
+  const ratings = four.map((p) => p.ntrp);
+  const matchSpread = Math.max(...ratings) - Math.min(...ratings);
+
   // Slight bonus if player was played very recently (encourages rotation)
   let recencyPenalty = 0;
-  for (const p of [...teamA, ...teamB]) {
+  for (const p of four) {
     const last = ctx.recentMatchOfPlayer.get(p.id);
     if (last !== undefined) {
       const gap = ctx.matchIndex - last;
@@ -106,33 +150,65 @@ const scoreCandidate = (
     }
   }
 
-  return (teamateRepeatA + teamateRepeatB) * 1000 + recencyPenalty * 10 + indexPenalty;
+  return (
+    (teamateRepeatA + teamateRepeatB) * WEIGHT_TEAMMATE_REPEAT +
+    teamGap * WEIGHT_TEAM_GAP +
+    matchSpread * WEIGHT_MATCH_SPREAD +
+    recencyPenalty * WEIGHT_RECENCY +
+    indexPenalty
+  );
 };
 
+/** All ways to choose `k` of the first `poolSize` indices, in ascending order. */
+const chooseIndices = (poolSize: number, k: number): number[][] => {
+  const out: number[][] = [];
+  const current: number[] = [];
+  const walk = (start: number) => {
+    if (current.length === k) {
+      out.push([...current]);
+      return;
+    }
+    for (let i = start; i < poolSize; i++) {
+      current.push(i);
+      walk(i + 1);
+      current.pop();
+    }
+  };
+  walk(0);
+  return out;
+};
+
+/**
+ * Pick the best match from `available`, always including every player in
+ * `mustPlay` — those have no spare matches left, so leaving one out would
+ * make equal play counts impossible.
+ */
 const pickMatch = (
   available: Player[],
+  mustPlay: Player[],
   ctx: PickContext,
 ): { teamA: [Player, Player]; teamB: [Player, Player] } | null => {
+  const slots = 4 - mustPlay.length;
+  if (slots < 0 || available.length < slots) return null;
+
   const limit = Math.min(available.length, 8);
+  // Cheapest choice is the front of the priority order; anything later is a skip.
+  const minIndexSum = (slots * (slots - 1)) / 2;
+
   let best: { teamA: [Player, Player]; teamB: [Player, Player] } | null = null;
   let bestScore = Infinity;
 
-  for (let i1 = 0; i1 < limit; i1++) {
-    for (let i2 = i1 + 1; i2 < limit; i2++) {
-      for (let i3 = i2 + 1; i3 < limit; i3++) {
-        for (let i4 = i3 + 1; i4 < limit; i4++) {
-          const four = [available[i1], available[i2], available[i3], available[i4]];
-          const indexPenalty = i1 + i2 + i3 + i4 - 6;
+  for (const combo of chooseIndices(limit, slots)) {
+    const four = [...mustPlay, ...combo.map((i) => available[i])];
+    if (four.filter((p) => p.gender === "F").length < ctx.minFemales) continue;
+    const indexPenalty = combo.reduce((sum, i) => sum + i, 0) - minIndexSum;
 
-          for (const [teamA, teamB] of teamSplits(four)) {
-            if (isFemaleOnly(teamA) || isFemaleOnly(teamB)) continue;
-            const score = scoreCandidate(teamA, teamB, indexPenalty, ctx);
-            if (score < bestScore) {
-              bestScore = score;
-              best = { teamA, teamB };
-            }
-          }
-        }
+    for (const [teamA, teamB] of teamSplits(four)) {
+      if (isFemaleOnly(teamA) || isFemaleOnly(teamB)) continue;
+      const score = scoreCandidate(teamA, teamB, indexPenalty, ctx);
+      if (score < bestScore) {
+        bestScore = score;
+        best = { teamA, teamB };
       }
     }
   }
@@ -192,12 +268,36 @@ export const generateBracket = (
     );
     if (available.length < 4) break;
 
-    const ordered = prioritizedAvailable(available, playCount);
-    const picked = pickMatch(ordered, {
+    /*
+     * Equal play counts are a hard constraint, not a preference: a player
+     * whose remaining games equal the remaining matches has to be in every
+     * one of them. Fixing those first keeps the NTRP scoring below from
+     * balancing a match at the cost of someone's game count.
+     */
+    const remainingMatches = totalMatches - mIdx;
+    const mustPlay: Player[] = [];
+    const optional: Player[] = [];
+    for (const p of available) {
+      const left = gamesPerPlayer - (playCount.get(p.id) ?? 0);
+      if (left >= remainingMatches) mustPlay.push(p);
+      else optional.push(p);
+    }
+    // Remaining slots always total 4 × remainingMatches, so this cannot exceed 4.
+    if (mustPlay.length > 4) break;
+
+    const femaleSlotsLeft = available.reduce(
+      (sum, p) =>
+        p.gender === "F" ? sum + gamesPerPlayer - (playCount.get(p.id) ?? 0) : sum,
+      0,
+    );
+
+    const ordered = prioritizedAvailable(optional, playCount);
+    const picked = pickMatch(ordered, mustPlay, {
       teammateCount,
       playCount,
       recentMatchOfPlayer,
       matchIndex: mIdx,
+      minFemales: Math.max(0, femaleSlotsLeft - 2 * (remainingMatches - 1)),
     });
 
     if (!picked) break;

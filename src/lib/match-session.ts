@@ -1,4 +1,10 @@
-import type { BracketResult, Player } from "./match-maker";
+import {
+  DEFAULT_NTRP,
+  NTRP_MAX,
+  NTRP_MIN,
+  type BracketResult,
+  type Player,
+} from "./match-maker";
 import type { Gender } from "./data/members";
 
 export interface MatchScore {
@@ -52,6 +58,23 @@ const fail = (message: string): never => {
 const isGender = (value: unknown): value is Gender =>
   value === "M" || value === "F";
 
+/**
+ * A session stored before NTRP existed has no rating on its guests. Fall back
+ * to the default there so an in-progress session survives the deploy; anything
+ * present but malformed is still rejected.
+ */
+const parseNtrpField = (value: unknown, where: string): number => {
+  if (value === undefined || value === null) return DEFAULT_NTRP;
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    fail(`${where}.ntrp 가 숫자가 아닙니다.`);
+  }
+  const ntrp = value as number;
+  if (ntrp < NTRP_MIN || ntrp > NTRP_MAX) {
+    fail(`${where}.ntrp 는 ${NTRP_MIN} ~ ${NTRP_MAX} 범위여야 합니다.`);
+  }
+  return ntrp;
+};
+
 const parsePlayer = (value: unknown, where: string): Player => {
   if (typeof value !== "object" || value === null) fail(`${where}: 객체가 아닙니다.`);
   const p = value as Record<string, unknown>;
@@ -62,6 +85,7 @@ const parsePlayer = (value: unknown, where: string): Player => {
     id: p.id as string,
     name: p.name as string,
     gender: p.gender as Gender,
+    ntrp: parseNtrpField(p.ntrp, where),
     ...(p.isGuest === true ? { isGuest: true } : {}),
   };
 };

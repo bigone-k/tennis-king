@@ -4,6 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { members, type Gender } from "@/lib/data/members";
 import {
   adjustGamesPerPlayer,
+  DEFAULT_NTRP,
+  NTRP_OPTIONS,
+  parseNtrp,
+  teamNtrp,
   type BracketResult,
   type Match,
   type Player,
@@ -12,6 +16,9 @@ import type { MatchScore } from "@/lib/match-session";
 import { useMatchSession, type SyncStatus } from "@/lib/use-match-session";
 
 type Winner = "A" | "B" | null;
+
+/** 2.5 → "2.5", 2 → "2.0" — ratings always read as one decimal. */
+const formatNtrp = (value: number): string => value.toFixed(1);
 
 const getWinner = (s?: MatchScore): Winner => {
   if (!s) return null;
@@ -35,6 +42,7 @@ export default function MatchMakerPage() {
         id: `m-${m.no}`,
         name: m.name,
         gender: m.gender,
+        ntrp: parseNtrp(m.ntrp),
       })),
     [],
   );
@@ -63,6 +71,7 @@ export default function MatchMakerPage() {
   const [showGuestForm, setShowGuestForm] = useState(false);
   const [guestName, setGuestName] = useState("");
   const [guestGender, setGuestGender] = useState<Gender>("M");
+  const [guestNtrp, setGuestNtrp] = useState<number>(DEFAULT_NTRP);
   const [showFinal, setShowFinal] = useState(false);
 
   const allPlayers = useMemo(
@@ -97,12 +106,19 @@ export default function MatchMakerPage() {
     if (!name) return;
     // randomUUID avoids collisions when two people add a guest at once.
     const id = `g-${crypto.randomUUID()}`;
-    const guest: Player = { id, name, gender: guestGender, isGuest: true };
+    const guest: Player = {
+      id,
+      name,
+      gender: guestGender,
+      ntrp: guestNtrp,
+      isGuest: true,
+    };
     update((cur) => ({
       guests: [...cur.guests, guest],
       selectedIds: [...cur.selectedIds, id],
     }));
     setGuestName("");
+    setGuestNtrp(DEFAULT_NTRP);
     setShowGuestForm(false);
   };
 
@@ -236,7 +252,7 @@ export default function MatchMakerPage() {
                     )}
                   </p>
                   <p className="text-[11px] text-gray-400">
-                    {p.gender === "M" ? "남" : "여"}
+                    {p.gender === "M" ? "남" : "여"} · NTRP {formatNtrp(p.ntrp)}
                   </p>
                 </div>
 
@@ -279,7 +295,7 @@ export default function MatchMakerPage() {
         </div>
 
         {showGuestForm && (
-          <div className="card p-3 flex items-center gap-2">
+          <div className="card p-3 flex flex-wrap items-center gap-2">
             <input
               type="text"
               value={guestName}
@@ -287,15 +303,28 @@ export default function MatchMakerPage() {
               onKeyDown={(e) => e.key === "Enter" && addGuest()}
               placeholder="게스트 이름"
               autoFocus
-              className="flex-1 px-3 py-2 text-sm rounded-lg border border-gray-200 focus:outline-none focus:border-emerald-500"
+              className="flex-1 min-w-[8rem] px-3 py-2 text-sm rounded-lg border border-gray-200 focus:outline-none focus:border-emerald-500"
             />
             <select
               value={guestGender}
               onChange={(e) => setGuestGender(e.target.value as Gender)}
+              aria-label="게스트 성별"
               className="px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white"
             >
               <option value="M">남</option>
               <option value="F">여</option>
+            </select>
+            <select
+              value={guestNtrp}
+              onChange={(e) => setGuestNtrp(Number(e.target.value))}
+              aria-label="게스트 NTRP"
+              className="px-3 py-2 text-sm rounded-lg border border-gray-200 bg-white"
+            >
+              {NTRP_OPTIONS.map((v) => (
+                <option key={v} value={v}>
+                  NTRP {formatNtrp(v)}
+                </option>
+              ))}
             </select>
             <button
               onClick={addGuest}
@@ -307,6 +336,7 @@ export default function MatchMakerPage() {
               onClick={() => {
                 setShowGuestForm(false);
                 setGuestName("");
+                setGuestNtrp(DEFAULT_NTRP);
               }}
               className="px-2 py-2 text-sm text-gray-400 hover:text-gray-600"
             >
@@ -573,6 +603,14 @@ function MatchCard({
           {match.index}경기
         </span>
         <div className="flex items-center gap-2">
+          <span
+            className="text-[10px] font-semibold text-gray-400 tabular-nums"
+            title="양 팀 NTRP 합계 차이 (0에 가까울수록 균형)"
+          >
+            NTRP 차 {formatNtrp(Math.abs(
+              teamNtrp(match.teamA.players) - teamNtrp(match.teamB.players),
+            ))}
+          </span>
           {winner && (
             <span className="text-[11px] font-bold text-emerald-600">
               🏆 팀 {winner} 승
@@ -692,19 +730,27 @@ function TeamPanel({
         : "bg-gray-50";
   return (
     <div className={`rounded-xl p-3 ${ring} transition-all`}>
-      <p className="text-[10px] font-bold text-gray-400 tracking-widest mb-1.5">
-        TEAM {label}
-      </p>
+      <div className="flex items-baseline justify-between mb-1.5">
+        <p className="text-[10px] font-bold text-gray-400 tracking-widest">
+          TEAM {label}
+        </p>
+        <p className="text-[10px] font-bold text-gray-500 tabular-nums">
+          Σ {formatNtrp(teamNtrp(players))}
+        </p>
+      </div>
       <div className="space-y-1">
         {players.map((p) => (
           <div key={p.id} className="flex items-center gap-1.5">
             <span
-              className={`w-1.5 h-1.5 rounded-full ${
+              className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                 p.gender === "M" ? "bg-emerald-500" : "bg-teal-400"
               }`}
             />
-            <span className="text-sm font-semibold text-gray-800">
+            <span className="text-sm font-semibold text-gray-800 truncate">
               {p.name}
+            </span>
+            <span className="text-[10px] text-gray-400 tabular-nums ml-auto">
+              {formatNtrp(p.ntrp)}
             </span>
           </div>
         ))}
