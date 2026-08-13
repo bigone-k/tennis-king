@@ -4,18 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { members, type Gender } from "@/lib/data/members";
 import {
   adjustGamesPerPlayer,
-  generateBracket,
   type BracketResult,
   type Match,
   type Player,
 } from "@/lib/match-maker";
+import type { MatchScore } from "@/lib/match-session";
+import { useMatchSession, type SyncStatus } from "@/lib/use-match-session";
 
 type Winner = "A" | "B" | null;
-
-interface MatchScore {
-  scoreA: number;
-  scoreB: number;
-}
 
 const getWinner = (s?: MatchScore): Winner => {
   if (!s) return null;
@@ -24,8 +20,6 @@ const getWinner = (s?: MatchScore): Winner => {
   return null;
 };
 
-const STORAGE_KEY = "tennis-king:match-maker:v1";
-
 /* Dramatic overlay timing (ms). Sum of per-phase durations must equal OVERLAY_TOTAL_MS. */
 const PHASE_READY_MS = 550;
 const PHASE_SHUFFLE_MS = 1300;
@@ -33,14 +27,6 @@ const PHASE_COUNTDOWN_MS = 1200; // 3, 2, 1 each 400ms
 const PHASE_FLASH_MS = 300;
 const OVERLAY_TOTAL_MS =
   PHASE_READY_MS + PHASE_SHUFFLE_MS + PHASE_COUNTDOWN_MS + PHASE_FLASH_MS;
-
-interface PersistedState {
-  guests: Player[];
-  selectedIds: string[];
-  gamesPerPlayer: number;
-  bracket: BracketResult | null;
-  scores: Record<number, MatchScore>;
-}
 
 export default function MatchMakerPage() {
   const memberPlayers = useMemo<Player[]>(
@@ -53,66 +39,31 @@ export default function MatchMakerPage() {
     [],
   );
 
-  const [guests, setGuests] = useState<Player[]>([]);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [gamesPerPlayer, setGamesPerPlayer] = useState(3);
+  /* Shared across everyone on the site — see docs/DEV-PLAN.md §5. */
+  const {
+    session,
+    status,
+    pending,
+    errorMessage,
+    conflicted,
+    dismissConflict,
+    update,
+    generate,
+    reset,
+  } = useMatchSession();
+
+  const { guests, gamesPerPlayer, bracket, scores } = session;
+  const selectedIds = useMemo(
+    () => new Set(session.selectedIds),
+    [session.selectedIds],
+  );
+
   const [isGenerating, setIsGenerating] = useState(false);
-  const [bracket, setBracket] = useState<BracketResult | null>(null);
-  const [scores, setScores] = useState<Record<number, MatchScore>>({});
+  const [generateError, setGenerateError] = useState<string | null>(null);
   const [showGuestForm, setShowGuestForm] = useState(false);
   const [guestName, setGuestName] = useState("");
   const [guestGender, setGuestGender] = useState<Gender>("M");
-  const [hydrated, setHydrated] = useState(false);
   const [showFinal, setShowFinal] = useState(false);
-
-  /* --- localStorage hydration (on mount) ---
-   *  Reads a snapshot from browser storage once after mount. Deferred via
-   *  queueMicrotask so React doesn't flag synchronous setState in an effect;
-   *  the rule wants useSyncExternalStore but our usage is read-once, not a
-   *  live subscription. */
-  useEffect(() => {
-    let cancelled = false;
-    queueMicrotask(() => {
-      if (cancelled) return;
-      try {
-        const raw = window.localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          const data = JSON.parse(raw) as Partial<PersistedState>;
-          if (Array.isArray(data.guests)) setGuests(data.guests);
-          if (Array.isArray(data.selectedIds))
-            setSelectedIds(new Set(data.selectedIds));
-          if (typeof data.gamesPerPlayer === "number")
-            setGamesPerPlayer(data.gamesPerPlayer);
-          if (data.bracket) setBracket(data.bracket);
-          if (data.scores && typeof data.scores === "object")
-            setScores(data.scores);
-        }
-      } catch {
-        /* ignore malformed storage */
-      }
-      setHydrated(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  /* --- localStorage persistence --- */
-  useEffect(() => {
-    if (!hydrated) return;
-    try {
-      const data: PersistedState = {
-        guests,
-        selectedIds: [...selectedIds],
-        gamesPerPlayer,
-        bracket,
-        scores,
-      };
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-    } catch {
-      /* quota/serialization errors ignored */
-    }
-  }, [hydrated, guests, selectedIds, gamesPerPlayer, bracket, scores]);
 
   const allPlayers = useMemo(
     () => [...memberPlayers, ...guests],
@@ -133,62 +84,66 @@ export default function MatchMakerPage() {
   );
 
   const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
+    update((cur) => {
+      const next = new Set(cur.selectedIds);
       if (next.has(id)) next.delete(id);
       else next.add(id);
-      return next;
+      return { selectedIds: [...next] };
     });
   };
 
   const addGuest = () => {
     const name = guestName.trim();
     if (!name) return;
-    const id = `g-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    // randomUUID avoids collisions when two people add a guest at once.
+    const id = `g-${crypto.randomUUID()}`;
     const guest: Player = { id, name, gender: guestGender, isGuest: true };
-    setGuests((prev) => [...prev, guest]);
-    setSelectedIds((prev) => new Set(prev).add(id));
+    update((cur) => ({
+      guests: [...cur.guests, guest],
+      selectedIds: [...cur.selectedIds, id],
+    }));
     setGuestName("");
     setShowGuestForm(false);
   };
 
   const removeGuest = (id: string) => {
-    setGuests((prev) => prev.filter((g) => g.id !== id));
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      next.delete(id);
-      return next;
-    });
+    update((cur) => ({
+      guests: cur.guests.filter((g) => g.id !== id),
+      selectedIds: cur.selectedIds.filter((s) => s !== id),
+    }));
   };
 
-  const selectAll = () =>
-    setSelectedIds(new Set(allPlayers.map((p) => p.id)));
-  const clearAll = () => setSelectedIds(new Set());
+  const selectAll = () => update({ selectedIds: allPlayers.map((p) => p.id) });
+  const clearAll = () => update({ selectedIds: [] });
 
-  const resetBracket = () => {
+  const resetBracket = async () => {
     if (!bracket) return;
     const ok = window.confirm(
-      "현재 대진표와 점수를 초기화합니다. 계속하시겠습니까?",
+      "현재 대진표와 점수를 초기화합니다. 접속 중인 모든 회원에게 적용됩니다. 계속하시겠습니까?",
     );
     if (!ok) return;
-    setBracket(null);
-    setScores({});
+    await reset();
   };
 
   const hasBracket = bracket !== null && bracket.matches.length > 0;
   const canGenerate =
-    selectedPlayers.length >= 4 && !isGenerating && !hasBracket;
+    selectedPlayers.length >= 4 &&
+    !isGenerating &&
+    !hasBracket &&
+    status !== "loading";
 
-  const handleGenerate = () => {
+  const handleGenerate = async () => {
     if (!canGenerate) return;
-    setBracket(null);
-    setScores({});
+    setGenerateError(null);
     setIsGenerating(true);
-    window.setTimeout(() => {
-      const result = generateBracket(selectedPlayers, gamesPerPlayer);
-      setBracket(result);
-      setIsGenerating(false);
-    }, OVERLAY_TOTAL_MS);
+    // Run the reveal animation and the server round trip together so the
+    // overlay hides the latency instead of adding to it.
+    const [failure] = await Promise.all([
+      generate(),
+      new Promise((resolve) => window.setTimeout(resolve, OVERLAY_TOTAL_MS)),
+    ]);
+    setIsGenerating(false);
+    if (failure) setGenerateError(failure);
   };
 
   return (
@@ -200,7 +155,25 @@ export default function MatchMakerPage() {
         <p className="text-sm text-gray-400 mt-1">
           공정한 랜덤 복식 대진표를 자동으로 생성합니다.
         </p>
+        <SyncBadge status={status} pending={pending} message={errorMessage} />
       </header>
+
+      {conflicted && (
+        <div className="flex items-start gap-3 text-xs text-amber-800 bg-amber-50 border border-amber-200 px-4 py-3 rounded-xl">
+          <span className="text-base leading-none">⚠</span>
+          <p className="flex-1 leading-relaxed">
+            다른 회원이 먼저 수정해서 최신 내용으로 새로 불러왔습니다. 방금
+            입력한 값이 반영되지 않았을 수 있으니 확인해 주세요.
+          </p>
+          <button
+            onClick={dismissConflict}
+            className="text-amber-600 hover:text-amber-800 font-bold shrink-0"
+            aria-label="알림 닫기"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* 1. Participants */}
       <section className="space-y-4">
@@ -350,7 +323,11 @@ export default function MatchMakerPage() {
         </h2>
         <div className="card p-4 flex items-center gap-4">
           <button
-            onClick={() => setGamesPerPlayer((v) => Math.max(1, v - 1))}
+            onClick={() =>
+              update((cur) => ({
+                gamesPerPlayer: Math.max(1, cur.gamesPerPlayer - 1),
+              }))
+            }
             className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 text-xl font-bold text-gray-700"
             aria-label="게임 수 감소"
           >
@@ -363,7 +340,11 @@ export default function MatchMakerPage() {
             <p className="text-xs text-gray-400 mt-1">게임 / 1인</p>
           </div>
           <button
-            onClick={() => setGamesPerPlayer((v) => Math.min(20, v + 1))}
+            onClick={() =>
+              update((cur) => ({
+                gamesPerPlayer: Math.min(20, cur.gamesPerPlayer + 1),
+              }))
+            }
             className="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 text-xl font-bold text-gray-700"
             aria-label="게임 수 증가"
           >
@@ -411,6 +392,11 @@ export default function MatchMakerPage() {
             <span className="absolute inset-y-0 w-1/2 bg-gradient-to-r from-transparent via-white/40 to-transparent animate-shine pointer-events-none" />
           )}
         </button>
+        {generateError && (
+          <p className="text-xs text-red-700 bg-red-50 border border-red-100 px-3 py-2.5 rounded-lg">
+            대진표 생성 실패: {generateError}
+          </p>
+        )}
         {hasBracket ? (
           <p className="text-xs text-center text-gray-400">
             새 대진표를 만들려면 아래{" "}
@@ -453,28 +439,33 @@ export default function MatchMakerPage() {
                 match={m}
                 score={scores[m.index]}
                 onChangeScore={(team, delta) =>
-                  setScores((prev) => {
-                    const cur = prev[m.index] ?? { scoreA: 0, scoreB: 0 };
+                  update((state) => {
+                    const cur = state.scores[m.index] ?? {
+                      scoreA: 0,
+                      scoreB: 0,
+                    };
                     return {
-                      ...prev,
-                      [m.index]: {
-                        scoreA:
-                          team === "A"
-                            ? Math.max(0, cur.scoreA + delta)
-                            : cur.scoreA,
-                        scoreB:
-                          team === "B"
-                            ? Math.max(0, cur.scoreB + delta)
-                            : cur.scoreB,
+                      scores: {
+                        ...state.scores,
+                        [m.index]: {
+                          scoreA:
+                            team === "A"
+                              ? Math.max(0, cur.scoreA + delta)
+                              : cur.scoreA,
+                          scoreB:
+                            team === "B"
+                              ? Math.max(0, cur.scoreB + delta)
+                              : cur.scoreB,
+                        },
                       },
                     };
                   })
                 }
                 onResetScore={() =>
-                  setScores((prev) => {
-                    const next = { ...prev };
+                  update((state) => {
+                    const next = { ...state.scores };
                     delete next[m.index];
-                    return next;
+                    return { scores: next };
                   })
                 }
                 revealDelayMs={i * 200}
@@ -521,6 +512,34 @@ export default function MatchMakerPage() {
 }
 
 /* ---------- Components ---------- */
+
+/** Shows whether what you're looking at is in sync with everyone else. */
+function SyncBadge({
+  status,
+  pending,
+  message,
+}: {
+  status: SyncStatus;
+  pending: boolean;
+  message: string | null;
+}) {
+  const config = pending
+    ? { dot: "bg-emerald-400 animate-pulse", text: "저장 중…", tone: "text-gray-400" }
+    : status === "loading"
+      ? { dot: "bg-gray-300 animate-pulse", text: "불러오는 중…", tone: "text-gray-400" }
+      : status === "live"
+        ? { dot: "bg-emerald-500", text: "실시간 공유 중 · 10초마다 갱신", tone: "text-gray-400" }
+        : status === "paused"
+          ? { dot: "bg-gray-300", text: "자동 갱신 일시중지 · 화면을 누르면 재개", tone: "text-gray-400" }
+          : { dot: "bg-red-500", text: message ?? "연결 끊김", tone: "text-red-600" };
+
+  return (
+    <p className={`flex items-center gap-2 text-[11px] mt-2 ${config.tone}`}>
+      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${config.dot}`} />
+      {config.text}
+    </p>
+  );
+}
 
 interface MatchCardProps {
   match: Match;

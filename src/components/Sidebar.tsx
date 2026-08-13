@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import { logout } from "@/lib/auth/actions";
 
 const menuItems = [
   { href: "/notices", label: "공지사항", icon: "📋" },
@@ -15,6 +16,9 @@ const menuItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+
+  // The access-code gate is shown standalone, without club navigation.
+  if (pathname === "/gate") return null;
 
   const navLinks = menuItems.map((item) => {
     const isActive = pathname.startsWith(item.href);
@@ -34,6 +38,18 @@ export default function Sidebar() {
       </Link>
     );
   });
+
+  const logoutButton = (
+    <form action={logout}>
+      <button
+        type="submit"
+        className="w-full flex items-center gap-3 px-5 py-3.5 text-sm text-white/50 hover:text-white/90 hover:bg-white/8 transition-all duration-200 border-l-[3px] border-transparent"
+      >
+        <span className="text-base">🚪</span>
+        나가기
+      </button>
+    </form>
+  );
 
   return (
     <>
@@ -96,7 +112,10 @@ export default function Sidebar() {
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        <nav className="py-6">{navLinks}</nav>
+        <nav className="py-6">
+          {navLinks}
+          <div className="mt-2 pt-2 border-t border-white/10">{logoutButton}</div>
+        </nav>
       </aside>
 
       {/* 데스크탑 사이드바 */}
@@ -120,6 +139,7 @@ export default function Sidebar() {
           </Link>
         </div>
         <nav className="flex-1 py-2">{navLinks}</nav>
+        <div className="border-t border-white/10">{logoutButton}</div>
         <div className="px-5 py-4 border-t border-white/10">
           <p className="text-white/30 text-[10px]">Est. 2025</p>
         </div>
