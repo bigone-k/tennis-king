@@ -116,6 +116,13 @@ const WEIGHT_TEAM_GAP = 200;
 /** (max − min) across the 4 players — keeps a 3.5 from carrying a 1.0. */
 const WEIGHT_MATCH_SPREAD = 20;
 const WEIGHT_RECENCY = 10;
+/**
+ * Per position skipped in the waiting order. Has to be comparable to the NTRP
+ * weights: at 1 it was 200× weaker, so the search happily passed over whoever
+ * had been waiting to shave 0.5 off a team gap, and the same few players ended
+ * up filling the opening matches.
+ */
+const WEIGHT_INDEX = 40;
 
 /**
  * Score a candidate match. Lower is better.
@@ -155,7 +162,7 @@ const scoreCandidate = (
     teamGap * WEIGHT_TEAM_GAP +
     matchSpread * WEIGHT_MATCH_SPREAD +
     recencyPenalty * WEIGHT_RECENCY +
-    indexPenalty
+    indexPenalty * WEIGHT_INDEX
   );
 };
 
@@ -291,14 +298,30 @@ export const generateBracket = (
       0,
     );
 
-    const ordered = prioritizedAvailable(optional, playCount);
-    const picked = pickMatch(ordered, mustPlay, {
+    /*
+     * Upper bound, mirroring the `mustPlay` lower bound. After m matches
+     * 4 × m slots have been handed out, so nobody should be further ahead
+     * than their share of them. Without this the play counts still even out
+     * by the end, but only because whoever ran ahead early sits out the rest
+     * — which reads as "the same people keep playing the opening matches".
+     */
+    const cap = Math.ceil((4 * (mIdx + 1)) / players.length);
+    const withinCap = optional.filter((p) => (playCount.get(p.id) ?? 0) < cap);
+
+    const ctx = {
       teammateCount,
       playCount,
       recentMatchOfPlayer,
       matchIndex: mIdx,
       minFemales: Math.max(0, femaleSlotsLeft - 2 * (remainingMatches - 1)),
-    });
+    };
+
+    // The cap is a preference, not a rule: narrowing the pool can leave no
+    // legal match at all (the female-pairing rule still has to hold), so fall
+    // back to the full pool rather than cutting the bracket short.
+    const picked =
+      pickMatch(prioritizedAvailable(withinCap, playCount), mustPlay, ctx) ??
+      pickMatch(prioritizedAvailable(optional, playCount), mustPlay, ctx);
 
     if (!picked) break;
 

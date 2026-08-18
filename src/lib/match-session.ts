@@ -28,7 +28,13 @@ export interface MatchSession extends MatchSessionData {
   updatedAt: string;
 }
 
-export const REDIS_KEY = "tennis-king:match-session:v1";
+/**
+ * Overridable so a local run can be pointed at a throwaway key. The shared
+ * session is live for the whole club — testing against the default would
+ * rewrite what everyone else is looking at.
+ */
+export const REDIS_KEY =
+  process.env.MATCH_SESSION_KEY || "tennis-king:match-session:v1";
 
 export const DEFAULT_GAMES_PER_PLAYER = 3;
 
@@ -149,6 +155,63 @@ const parseScores = (value: unknown): Record<number, MatchScore> => {
     };
   }
   return result;
+};
+
+/* ---------- Score operations ----------
+ * Scores change through their own endpoint rather than a whole-session write.
+ * Sending "+1 on match 3" instead of the entire state means two people
+ * tapping different matches never contend for the same version. */
+
+export interface ScoreDelta {
+  match: number;
+  team: "A" | "B";
+  delta: number;
+}
+
+export interface ScoreReset {
+  match: number;
+  reset: true;
+}
+
+export type ScoreOp = ScoreDelta | ScoreReset;
+
+export const isScoreReset = (op: ScoreOp): op is ScoreReset => "reset" in op;
+
+/** Throws `InvalidPayloadError` (see `isInvalidPayload`) when the shape is wrong. */
+export const parseScoreOp = (value: unknown): ScoreOp => {
+  if (typeof value !== "object" || value === null) fail("본문이 객체가 아닙니다.");
+  const o = value as Record<string, unknown>;
+
+  if (typeof o.match !== "number" || !Number.isInteger(o.match)) {
+    fail("match 가 정수가 아닙니다.");
+  }
+  const match = o.match as number;
+
+  if (o.reset === true) return { match, reset: true };
+
+  if (o.team !== "A" && o.team !== "B") fail("team 은 'A' 또는 'B' 여야 합니다.");
+  if (typeof o.delta !== "number" || !Number.isInteger(o.delta) || o.delta === 0) {
+    fail("delta 가 0 이 아닌 정수가 아닙니다.");
+  }
+  return { match, team: o.team as "A" | "B", delta: o.delta as number };
+};
+
+/** Apply one operation to a score map, returning a new map. */
+export const applyScoreOp = (
+  scores: Record<number, MatchScore>,
+  op: ScoreOp,
+): Record<number, MatchScore> => {
+  const next = { ...scores };
+  if (isScoreReset(op)) {
+    delete next[op.match];
+    return next;
+  }
+  const current = next[op.match] ?? { scoreA: 0, scoreB: 0 };
+  next[op.match] =
+    op.team === "A"
+      ? { ...current, scoreA: Math.max(0, current.scoreA + op.delta) }
+      : { ...current, scoreB: Math.max(0, current.scoreB + op.delta) };
+  return next;
 };
 
 /** Throws `InvalidPayloadError` (see `isInvalidPayload`) when the shape is wrong. */

@@ -56,6 +56,8 @@ export default function MatchMakerPage() {
     conflicted,
     dismissConflict,
     update,
+    changeScore,
+    resetScore,
     generate,
     reset,
   } = useMatchSession();
@@ -469,35 +471,9 @@ export default function MatchMakerPage() {
                 match={m}
                 score={scores[m.index]}
                 onChangeScore={(team, delta) =>
-                  update((state) => {
-                    const cur = state.scores[m.index] ?? {
-                      scoreA: 0,
-                      scoreB: 0,
-                    };
-                    return {
-                      scores: {
-                        ...state.scores,
-                        [m.index]: {
-                          scoreA:
-                            team === "A"
-                              ? Math.max(0, cur.scoreA + delta)
-                              : cur.scoreA,
-                          scoreB:
-                            team === "B"
-                              ? Math.max(0, cur.scoreB + delta)
-                              : cur.scoreB,
-                        },
-                      },
-                    };
-                  })
+                  changeScore(m.index, team, delta)
                 }
-                onResetScore={() =>
-                  update((state) => {
-                    const next = { ...state.scores };
-                    delete next[m.index];
-                    return { scores: next };
-                  })
-                }
+                onResetScore={() => resetScore(m.index)}
                 revealDelayMs={i * 200}
               />
             ))}

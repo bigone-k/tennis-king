@@ -6,9 +6,11 @@ import {
   emptySession,
   isInvalidPayload,
   parseMatchSessionData,
+  parseScoreOp,
   type MatchSessionData,
 } from "@/lib/match-session";
 import {
+  applyScore,
   clearSession,
   readSession,
   writeSession,
@@ -56,7 +58,14 @@ export async function GET() {
   }
 }
 
-/** Save client-side edits (selection, guests, scores, games per player). */
+/**
+ * Save client-side edits (selection, guests, games per player).
+ *
+ * Scores are deliberately NOT taken from this payload — they belong to PATCH.
+ * A whole-session write carries a snapshot of the scores taken before the
+ * request left the browser, so honouring it here would silently roll back a
+ * score somebody else entered in the meantime.
+ */
 export async function PUT(request: Request) {
   if (!(await hasValidSession())) return unauthorized();
 
@@ -77,8 +86,44 @@ export async function PUT(request: Request) {
   }
 
   try {
-    const saved = await writeSession(expectedVersion, data);
+    const current = await readSession();
+    if (current.version !== expectedVersion) return await conflict();
+
+    const saved = await writeSession(expectedVersion, {
+      ...data,
+      scores: current.scores,
+    });
     return saved ? NextResponse.json(saved) : await conflict();
+  } catch (error) {
+    return serverError(error);
+  }
+}
+
+/** Apply a single score change (+1 / −1 / reset) without touching anything else. */
+export async function PATCH(request: Request) {
+  if (!(await hasValidSession())) return unauthorized();
+
+  let op;
+  try {
+    op = parseScoreOp(await request.json());
+  } catch (error) {
+    if (isInvalidPayload(error) || error instanceof SyntaxError) {
+      return NextResponse.json(
+        { error: `요청 본문이 올바르지 않습니다: ${(error as Error).message}` },
+        { status: 400 },
+      );
+    }
+    return serverError(error);
+  }
+
+  try {
+    const saved = await applyScore(op);
+    return saved
+      ? NextResponse.json(saved)
+      : NextResponse.json(
+          { error: `${op.match}경기를 찾을 수 없습니다.` },
+          { status: 400 },
+        );
   } catch (error) {
     return serverError(error);
   }

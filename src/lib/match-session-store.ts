@@ -1,10 +1,12 @@
 import { redisDel, redisEval, redisGet } from "./redis";
 import {
   REDIS_KEY,
+  applyScoreOp,
   emptySession,
   parseMatchSessionData,
   type MatchSession,
   type MatchSessionData,
+  type ScoreOp,
 } from "./match-session";
 
 /**
@@ -78,6 +80,42 @@ export const writeSession = async (
   );
 
   return applied === 1 ? next : null;
+};
+
+/** Attempts before giving up on a score write; each retry re-reads the session. */
+const SCORE_MAX_ATTEMPTS = 5;
+
+/**
+ * Apply one score change on top of whatever is stored right now.
+ *
+ * Read-modify-write under the same CAS as everything else, retried on
+ * contention. The caller sends only the change, so two people tapping
+ * different matches both land instead of one overwriting the other.
+ *
+ * Returns `null` when the match is not in the current bracket.
+ */
+export const applyScore = async (op: ScoreOp): Promise<MatchSession | null> => {
+  for (let attempt = 0; attempt < SCORE_MAX_ATTEMPTS; attempt++) {
+    const current = await readSession();
+
+    const known = current.bracket?.matches.some((m) => m.index === op.match);
+    if (!known) return null;
+
+    const saved = await writeSession(current.version, {
+      guests: current.guests,
+      selectedIds: current.selectedIds,
+      gamesPerPlayer: current.gamesPerPlayer,
+      bracket: current.bracket,
+      scores: applyScoreOp(current.scores, op),
+    });
+    if (saved) return saved;
+  }
+
+  // Losing the race five times in a row means something is wrong — say so
+  // rather than reporting a score change that never happened.
+  throw new Error(
+    `점수 반영이 ${SCORE_MAX_ATTEMPTS}회 연속 실패했습니다. 잠시 후 다시 시도해 주세요.`,
+  );
 };
 
 export const clearSession = async (): Promise<void> => {
