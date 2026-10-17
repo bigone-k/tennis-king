@@ -5,17 +5,25 @@ import { members, type Gender } from "@/lib/data/members";
 import {
   adjustGamesPerPlayer,
   DEFAULT_NTRP,
+  matchKind,
   NTRP_OPTIONS,
   parseNtrp,
   teamNtrp,
   type BracketResult,
   type Match,
+  type MatchKind,
   type Player,
 } from "@/lib/match-maker";
 import type { MatchScore } from "@/lib/match-session";
 import { useMatchSession, type SyncStatus } from "@/lib/use-match-session";
 
 type Winner = "A" | "B" | null;
+
+const MATCH_KIND_LABEL: Record<MatchKind, { text: string; tone: string }> = {
+  female: { text: "여성복식!!", tone: "bg-pink-50 text-pink-600" },
+  mixed: { text: "혼성복식!!", tone: "bg-violet-50 text-violet-600" },
+  male: { text: "남성복식!!", tone: "bg-sky-50 text-sky-600" },
+};
 
 /** 2.5 → "2.5", 2 → "2.0" — ratings always read as one decimal. */
 const formatNtrp = (value: number): string => value.toFixed(1);
@@ -568,6 +576,7 @@ function MatchCard({
   const winner = getWinner(score);
   const aWin = winner === "A";
   const bWin = winner === "B";
+  const kind = MATCH_KIND_LABEL[matchKind(match)];
 
   return (
     <div
@@ -575,9 +584,14 @@ function MatchCard({
       style={{ animationDelay: `${revealDelayMs}ms` }}
     >
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-black text-white bg-gradient-to-r from-emerald-600 to-lime-500 px-3 py-1 rounded-full tracking-wider">
-          {match.index}경기
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs font-black text-white bg-gradient-to-r from-emerald-600 to-lime-500 px-3 py-1 rounded-full tracking-wider">
+            {match.index}경기
+          </span>
+          <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full ${kind.tone}`}>
+            {kind.text}
+          </span>
+        </div>
         <div className="flex items-center gap-2">
           <span
             className="text-[10px] font-semibold text-gray-400 tabular-nums"
