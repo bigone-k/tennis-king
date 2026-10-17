@@ -48,11 +48,13 @@ interface PickContext {
   recentMatchOfPlayer: Map<string, number>;
   matchIndex: number;
   /**
-   * Fewest women this match must include. Banning all-female teams caps a
-   * match at 2 women, so leaving too many for later makes the last matches
-   * unplayable — this keeps them being used up fast enough.
+   * Fewest women this match must include. Outside women's doubles a match
+   * holds at most 2 women, so leaving too many for later makes the last
+   * matches unplayable — this keeps them being used up fast enough.
    */
   minFemales: number;
+  /** Women's doubles (FF vs FF) is only offered once at least 4 women play. */
+  allowFemaleDoubles: boolean;
 }
 
 const pairKey = (a: Player, b: Player): string => {
@@ -211,7 +213,10 @@ const pickMatch = (
     const indexPenalty = combo.reduce((sum, i) => sum + i, 0) - minIndexSum;
 
     for (const [teamA, teamB] of teamSplits(four)) {
-      if (isFemaleOnly(teamA) || isFemaleOnly(teamB)) continue;
+      // An all-female team may only face another one (women's doubles).
+      const femaleOnlyTeams = Number(isFemaleOnly(teamA)) + Number(isFemaleOnly(teamB));
+      if (femaleOnlyTeams === 1) continue;
+      if (femaleOnlyTeams === 2 && !ctx.allowFemaleDoubles) continue;
       const score = scoreCandidate(teamA, teamB, indexPenalty, ctx);
       if (score < bestScore) {
         bestScore = score;
@@ -268,6 +273,7 @@ export const generateBracket = (
   const teammateCount = new Map<string, number>();
   const recentMatchOfPlayer = new Map<string, number>();
   const matches: Match[] = [];
+  const allowFemaleDoubles = players.filter((p) => p.gender === "F").length >= 4;
 
   for (let mIdx = 0; mIdx < totalMatches; mIdx++) {
     const available = players.filter(
@@ -314,6 +320,7 @@ export const generateBracket = (
       recentMatchOfPlayer,
       matchIndex: mIdx,
       minFemales: Math.max(0, femaleSlotsLeft - 2 * (remainingMatches - 1)),
+      allowFemaleDoubles,
     };
 
     // The cap is a preference, not a rule: narrowing the pool can leave no
