@@ -47,6 +47,14 @@ export const notices: Notice[] = [
     date: "2026-04-30",
     author: "관리자",
   },
+  {
+    id: 6,
+    title: "[공지] 2026 NOAD 하반기 오픈 안내 (10월 18일)",
+    content:
+      "10월 18일(일) 10:00~16:00 와이티게라지 테니스에서 노애드 하반기 오픈을 개최합니다. 승점 랭킹전·행운상 이벤트와 간식·굿즈가 준비되어 있습니다.",
+    date: "2026-10-17",
+    author: "관리자",
+  },
 ];
 
 export function getNoticeById(id: number): Notice | undefined {
