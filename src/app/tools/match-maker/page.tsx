@@ -19,10 +19,13 @@ import { useMatchSession, type SyncStatus } from "@/lib/use-match-session";
 
 type Winner = "A" | "B" | null;
 
-const MATCH_KIND_LABEL: Record<MatchKind, { text: string; tone: string }> = {
-  female: { text: "여성복식!!", tone: "bg-pink-50 text-pink-600" },
-  mixed: { text: "혼성복식!!", tone: "bg-violet-50 text-violet-600" },
-  male: { text: "남성복식!!", tone: "bg-sky-50 text-sky-600" },
+const MATCH_KIND_LABEL: Record<
+  MatchKind,
+  { emoji: string; text: string; tone: string }
+> = {
+  female: { emoji: "👭", text: "여성복식!!", tone: "bg-pink-50 text-pink-600 border-pink-200" },
+  mixed: { emoji: "👫", text: "혼성복식!!", tone: "bg-violet-50 text-violet-600 border-violet-200" },
+  male: { emoji: "👬", text: "남성복식!!", tone: "bg-sky-50 text-sky-600 border-sky-200" },
 };
 
 /** 2.5 → "2.5", 2 → "2.0" — ratings always read as one decimal. */
@@ -588,7 +591,12 @@ function MatchCard({
           <span className="text-xs font-black text-white bg-gradient-to-r from-emerald-600 to-lime-500 px-3 py-1 rounded-full tracking-wider">
             {match.index}경기
           </span>
-          <span className={`text-[11px] font-extrabold px-2 py-0.5 rounded-full ${kind.tone}`}>
+          <span
+            className={`inline-flex items-center gap-1 text-xs font-extrabold px-2.5 py-0.5 rounded-full border ${kind.tone}`}
+          >
+            <span className="text-sm leading-none" aria-hidden>
+              {kind.emoji}
+            </span>
             {kind.text}
           </span>
         </div>
