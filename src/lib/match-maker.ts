@@ -5,6 +5,12 @@ export const NTRP_MIN = 1.0;
 export const NTRP_MAX = 3.5;
 export const NTRP_OPTIONS = [1.0, 1.5, 2.0, 2.5, 3.0, 3.5] as const;
 
+/**
+ * Women's doubles guaranteed per bracket once at least 4 women play — fewer
+ * only when the roster cannot hold that many (e.g. 4 women playing 1 game).
+ */
+export const MIN_FEMALE_DOUBLES = 2;
+
 /** Used when a rating is unknown ("?" in the member list) or predates this field. */
 export const DEFAULT_NTRP = 2.0;
 
@@ -55,6 +61,12 @@ interface PickContext {
   minFemales: number;
   /** Women's doubles (FF vs FF) is only offered once at least 4 women play. */
   allowFemaleDoubles: boolean;
+  /**
+   * Set once at least 4 women play, in place of `minFemales`: whether the
+   * matches left after `four` can still all be played, women's doubles owed
+   * included.
+   */
+  leavesPlayable?: (four: Player[]) => boolean;
 }
 
 const pairKey = (a: Player, b: Player): string => {
@@ -210,6 +222,7 @@ const pickMatch = (
   for (const combo of chooseIndices(limit, slots)) {
     const four = [...mustPlay, ...combo.map((i) => available[i])];
     if (four.filter((p) => p.gender === "F").length < ctx.minFemales) continue;
+    if (ctx.leavesPlayable && !ctx.leavesPlayable(four)) continue;
     const indexPenalty = combo.reduce((sum, i) => sum + i, 0) - minIndexSum;
 
     for (const [teamA, teamB] of teamSplits(four)) {
@@ -225,6 +238,34 @@ const pickMatch = (
     }
   }
   return best;
+};
+
+/** Whether `slots` (games left per player) can fill `matches` matches of `perMatch` distinct players. */
+const enoughDistinct = (slots: number[], perMatch: number, matches: number): boolean =>
+  slots.reduce((sum, n) => sum + Math.min(n, matches), 0) >= perMatch * matches;
+
+/**
+ * Whether `matches` more matches can be played with these games left.
+ * A match other than women's doubles holds at most 2 women and so at least
+ * 2 men; women's doubles takes 4 women. Look for a count of women's doubles
+ * (at least `minDoubles`) that absorbs the women the other matches cannot,
+ * with enough distinct players for each kind.
+ */
+const canFinish = (
+  womenSlots: number[],
+  menSlots: number[],
+  matches: number,
+  minDoubles: number,
+): boolean => {
+  const femaleSlots = womenSlots.reduce((sum, n) => sum + n, 0);
+  for (let doubles = minDoubles; doubles <= matches && doubles * 4 <= femaleSlots; doubles++) {
+    const others = matches - doubles;
+    if (femaleSlots - doubles * 4 > others * 2) continue;
+    if (!enoughDistinct(womenSlots, 4, doubles)) continue;
+    if (!enoughDistinct(menSlots, 2, others)) continue;
+    return true;
+  }
+  return false;
 };
 
 /**
@@ -250,7 +291,19 @@ const prioritizedAvailable = (
   return ordered;
 };
 
-export const generateBracket = (
+const countFemales = (players: readonly Player[]): number =>
+  players.filter((p) => p.gender === "F").length;
+
+export type MatchKind = "female" | "mixed" | "male";
+
+/** Women's doubles, men's doubles, or anything with both. */
+export const matchKind = (match: Match): MatchKind => {
+  const women = countFemales([...match.teamA.players, ...match.teamB.players]);
+  if (women === 4) return "female";
+  return women === 0 ? "male" : "mixed";
+};
+
+const generateOnce = (
   players: Player[],
   requestedGamesPerPlayer: number,
 ): BracketResult => {
@@ -273,7 +326,15 @@ export const generateBracket = (
   const teammateCount = new Map<string, number>();
   const recentMatchOfPlayer = new Map<string, number>();
   const matches: Match[] = [];
-  const allowFemaleDoubles = players.filter((p) => p.gender === "F").length >= 4;
+  const allowFemaleDoubles = countFemales(players) >= 4;
+  let doublesOwed = 0;
+  if (allowFemaleDoubles) {
+    const slots = (gender: Gender) =>
+      players.filter((p) => p.gender === gender).map(() => gamesPerPlayer);
+    for (let n = MIN_FEMALE_DOUBLES; n > 0 && doublesOwed === 0; n--) {
+      if (canFinish(slots("F"), slots("M"), totalMatches, n)) doublesOwed = n;
+    }
+  }
 
   for (let mIdx = 0; mIdx < totalMatches; mIdx++) {
     const available = players.filter(
@@ -319,8 +380,23 @@ export const generateBracket = (
       playCount,
       recentMatchOfPlayer,
       matchIndex: mIdx,
-      minFemales: Math.max(0, femaleSlotsLeft - 2 * (remainingMatches - 1)),
+      minFemales: allowFemaleDoubles
+        ? 0
+        : Math.max(0, femaleSlotsLeft - 2 * (remainingMatches - 1)),
       allowFemaleDoubles,
+      leavesPlayable: allowFemaleDoubles
+        ? (four: Player[]) => {
+            const picked = new Set(four.map((p) => p.id));
+            const left = (p: Player) =>
+              gamesPerPlayer - (playCount.get(p.id) ?? 0) - (picked.has(p.id) ? 1 : 0);
+            return canFinish(
+              available.filter((p) => p.gender === "F").map(left),
+              available.filter((p) => p.gender === "M").map(left),
+              remainingMatches - 1,
+              Math.max(0, doublesOwed - (countFemales(four) === 4 ? 1 : 0)),
+            );
+          }
+        : undefined,
     };
 
     // The cap is a preference, not a rule: narrowing the pool can leave no
@@ -337,6 +413,9 @@ export const generateBracket = (
       teamA: { players: picked.teamA },
       teamB: { players: picked.teamB },
     });
+    if (countFemales([...picked.teamA, ...picked.teamB]) === 4) {
+      doublesOwed = Math.max(0, doublesOwed - 1);
+    }
 
     for (const p of [...picked.teamA, ...picked.teamB]) {
       playCount.set(p.id, (playCount.get(p.id) ?? 0) + 1);
@@ -354,4 +433,25 @@ export const generateBracket = (
     requestedGamesPerPlayer,
     playerGameCounts: Object.fromEntries(playCount),
   };
+};
+
+/** Fresh shuffles to try when a bracket with women's doubles comes out short. */
+const FEMALE_DOUBLES_ATTEMPTS = 20;
+
+export const generateBracket = (
+  players: Player[],
+  requestedGamesPerPlayer: number,
+): BracketResult => {
+  const isShort = (r: BracketResult) =>
+    r.matches.length < (players.length * r.gamesPerPlayer) / 4;
+
+  let result = generateOnce(players, requestedGamesPerPlayer);
+  // Matches are fixed one at a time, so once women's doubles are in play an
+  // early pick can still corner the last matches. Reshuffling usually gets
+  // past it; rosters under 4 women keep their single pass.
+  if (countFemales(players) < 4) return result;
+  for (let i = 1; i < FEMALE_DOUBLES_ATTEMPTS && isShort(result); i++) {
+    result = generateOnce(players, requestedGamesPerPlayer);
+  }
+  return result;
 };
