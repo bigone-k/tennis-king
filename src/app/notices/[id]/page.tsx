@@ -8,6 +8,7 @@ import Notice3Content from "@/components/notices/Notice3Content";
 import Notice4Content from "@/components/notices/Notice4Content";
 import Notice5Content from "@/components/notices/Notice5Content";
 import Notice6Content from "@/components/notices/Notice6Content";
+import Notice7Content from "@/components/notices/Notice7Content";
 
 const richContent: Record<number, ReactNode> = {
   1: <Notice1Content />,
@@ -16,6 +17,7 @@ const richContent: Record<number, ReactNode> = {
   4: <Notice4Content />,
   5: <Notice5Content />,
   6: <Notice6Content />,
+  7: <Notice7Content />,
 };
 
 export function generateStaticParams() {

@@ -8,7 +8,9 @@ export default function NoticeTable({ notices }: { notices: Notice[] }) {
         <Link
           key={notice.id}
           href={`/notices/${notice.id}`}
-          className="card card-hover block p-4 md:p-5"
+          className={`card card-hover block p-4 md:p-5 ${
+            notice.important ? "ring-2 ring-amber-400 bg-amber-50/60" : ""
+          }`}
         >
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 md:gap-4 min-w-0">

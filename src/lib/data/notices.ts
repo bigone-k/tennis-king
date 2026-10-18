@@ -4,6 +4,8 @@ export interface Notice {
   content: string;
   date: string;
   author: string;
+  /** Highlighted in the list so members don't miss it. */
+  important?: boolean;
 }
 
 export const notices: Notice[] = [
@@ -54,6 +56,15 @@ export const notices: Notice[] = [
       "10월 18일(일) 10:00~16:00 와이티게라지 테니스에서 노애드 하반기 오픈을 개최합니다. 승점 랭킹전·행운상 이벤트와 간식·굿즈가 준비되어 있습니다.",
     date: "2026-10-17",
     author: "관리자",
+  },
+  {
+    id: 7,
+    title: "[공지] 2026 NOAD 하반기 오픈 사용 비용 공개",
+    content:
+      "10월 18일 하반기 오픈에 사용된 비용(식비·상금·코트·굿즈) 총 1,034,880원의 상세 내역을 공개합니다.",
+    date: "2026-10-19",
+    author: "관리자",
+    important: true,
   },
 ];
 
