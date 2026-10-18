@@ -87,6 +87,7 @@ export default function MatchMakerPage() {
   const [guestGender, setGuestGender] = useState<Gender>("M");
   const [guestNtrp, setGuestNtrp] = useState<number>(DEFAULT_NTRP);
   const [showFinal, setShowFinal] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
 
   const allPlayers = useMemo(
     () => [...memberPlayers, ...guests],
@@ -468,6 +469,12 @@ export default function MatchMakerPage() {
                 각 {bracket.gamesPerPlayer}게임 플레이
               </span>
               <button
+                onClick={() => setShowSearch(true)}
+                className="text-xs font-semibold text-emerald-600 hover:text-emerald-700 hover:underline"
+              >
+                🔍 검색
+              </button>
+              <button
                 onClick={resetBracket}
                 className="text-xs font-semibold text-red-500 hover:text-red-600 hover:underline"
               >
@@ -519,6 +526,13 @@ export default function MatchMakerPage() {
       )}
 
       {isGenerating && <GenerationOverlay players={selectedPlayers} />}
+      {showSearch && bracket && (
+        <PlayerSearchModal
+          matches={bracket.matches}
+          scores={scores}
+          onClose={() => setShowSearch(false)}
+        />
+      )}
       {showFinal && bracket && (
         <FinalRankingModal
           ranked={computeRankings(bracket, scores)}
@@ -1067,6 +1081,202 @@ function GenerationOverlay({ players }: { players: Player[] }) {
           className="h-full bg-gradient-to-r from-emerald-400 via-lime-300 to-emerald-400 animate-progress-fill"
           style={{ animationDuration: `${OVERLAY_TOTAL_MS}ms` }}
         />
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Player Search Modal ---------- */
+
+function PlayerSearchModal({
+  matches,
+  scores,
+  onClose,
+}: {
+  matches: readonly Match[];
+  scores: Record<number, MatchScore>;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  // Everyone who appears in the bracket, keyed by id so a guest sharing a
+  // member's name still shows up as a separate person.
+  const players = useMemo(() => {
+    const byId = new Map<string, Player>();
+    for (const m of matches) {
+      for (const p of [...m.teamA.players, ...m.teamB.players]) {
+        byId.set(p.id, p);
+      }
+    }
+    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name, "ko"));
+  }, [matches]);
+
+  const keyword = query.trim();
+  const candidates = keyword
+    ? players.filter((p) => p.name.includes(keyword))
+    : players;
+  // A single hit needs no extra tap.
+  const activeId =
+    selectedId && candidates.some((p) => p.id === selectedId)
+      ? selectedId
+      : candidates.length === 1
+        ? candidates[0].id
+        : null;
+  const active = players.find((p) => p.id === activeId);
+
+  const playerMatches = activeId
+    ? matches.filter((m) =>
+        [...m.teamA.players, ...m.teamB.players].some((p) => p.id === activeId),
+      )
+    : [];
+
+  return (
+    <div
+      className="fixed inset-0 z-[150] flex items-start sm:items-center justify-center p-4 overflow-y-auto animate-overlay-fade"
+      role="dialog"
+      aria-modal="true"
+      aria-label="선수 경기 검색"
+    >
+      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
+
+      <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl p-5 animate-modal-pop my-auto">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-base font-bold text-gray-900">🔍 선수 경기 검색</h3>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full hover:bg-gray-100 text-gray-500 flex items-center justify-center"
+            aria-label="닫기"
+          >
+            ✕
+          </button>
+        </div>
+
+        <input
+          type="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="이름을 입력하세요"
+          autoFocus
+          className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+        />
+
+        <div className="flex flex-wrap gap-1.5 mt-3">
+          {candidates.length === 0 ? (
+            <p className="text-xs text-gray-400">
+              대진표에 &lsquo;{keyword}&rsquo; 이름의 참가자가 없습니다.
+            </p>
+          ) : (
+            candidates.map((p) => (
+              <button
+                key={p.id}
+                onClick={() => setSelectedId(p.id)}
+                className={`text-xs font-semibold px-2.5 py-1 rounded-full border transition-colors ${
+                  p.id === activeId
+                    ? "bg-emerald-600 text-white border-emerald-600"
+                    : "bg-gray-50 text-gray-700 border-gray-200 hover:border-emerald-400"
+                }`}
+              >
+                {p.name}
+                {p.isGuest && " (게스트)"}
+              </button>
+            ))
+          )}
+        </div>
+
+        {active && (
+          <div className="mt-4 space-y-2">
+            <p className="text-sm font-bold text-gray-900">
+              {active.name}{" "}
+              <span className="text-emerald-600">
+                총 {playerMatches.length}경기
+              </span>
+            </p>
+            {playerMatches.map((m) => (
+              <PlayerMatchRow
+                key={m.index}
+                match={m}
+                score={scores[m.index]}
+                playerId={active.id}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PlayerMatchRow({
+  match,
+  score,
+  playerId,
+}: {
+  match: Match;
+  score: MatchScore | undefined;
+  playerId: string;
+}) {
+  const onA = match.teamA.players.some((p) => p.id === playerId);
+  const mine = onA ? match.teamA.players : match.teamB.players;
+  const theirs = onA ? match.teamB.players : match.teamA.players;
+  const partner = mine.filter((p) => p.id !== playerId);
+  const myScore = (onA ? score?.scoreA : score?.scoreB) ?? 0;
+  const theirScore = (onA ? score?.scoreB : score?.scoreA) ?? 0;
+  const winner = getWinner(score);
+  const result =
+    winner === null
+      ? null
+      : (winner === "A") === onA
+        ? { text: "승", tone: "bg-emerald-500 text-white" }
+        : { text: "패", tone: "bg-gray-200 text-gray-500" };
+  const kind = MATCH_KIND_LABEL[matchKind(match)];
+
+  return (
+    <div className="flex items-center gap-3 rounded-xl bg-gray-50 px-3 py-2.5">
+      <span className="text-[11px] font-black text-white bg-gradient-to-r from-emerald-600 to-lime-500 px-2.5 py-0.5 rounded-full shrink-0">
+        {match.index}경기
+      </span>
+      <div className="min-w-0 flex-1 text-xs text-gray-700">
+        <p className="truncate">
+          <span className="text-gray-400">파트너</span>{" "}
+          <b>{partner.map((p) => p.name).join(", ")}</b>
+          <span className="ml-1" title={kind.text} aria-label={kind.text}>
+            {kind.emoji}
+          </span>
+        </p>
+        <p className="truncate">
+          <span className="text-gray-400">상대</span>{" "}
+          {theirs.map((p) => p.name).join(" · ")}
+        </p>
+      </div>
+      <div className="flex flex-col items-end gap-0.5 shrink-0">
+        <div className="flex items-center gap-1.5">
+          <span
+            className={`text-lg font-black tabular-nums ${
+              score ? "text-gray-900" : "text-gray-300"
+            }`}
+          >
+            {myScore} : {theirScore}
+          </span>
+          {result && (
+            <span
+              className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${result.tone}`}
+            >
+              {result.text}
+            </span>
+          )}
+        </div>
+        <span className="text-[10px] text-gray-400">
+          {score ? (result ? "우리 : 상대" : "동점") : "점수 미입력"}
+        </span>
       </div>
     </div>
   );
