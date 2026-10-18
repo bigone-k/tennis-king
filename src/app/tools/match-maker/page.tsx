@@ -26,6 +26,7 @@ const MATCH_KIND_LABEL: Record<
   female: { emoji: "👭", text: "여성복식!!", tone: "bg-pink-50 text-pink-600 border-pink-200" },
   mixed: { emoji: "👫", text: "혼성복식!!", tone: "bg-violet-50 text-violet-600 border-violet-200" },
   male: { emoji: "👬", text: "남성복식!!", tone: "bg-sky-50 text-sky-600 border-sky-200" },
+  jumbled: { emoji: "🎲", text: "잡복식!!", tone: "bg-amber-50 text-amber-600 border-amber-200" },
 };
 
 /** 2.5 → "2.5", 2 → "2.0" — ratings always read as one decimal. */

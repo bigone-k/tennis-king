@@ -294,13 +294,14 @@ const prioritizedAvailable = (
 const countFemales = (players: readonly Player[]): number =>
   players.filter((p) => p.gender === "F").length;
 
-export type MatchKind = "female" | "mixed" | "male";
+export type MatchKind = "female" | "mixed" | "male" | "jumbled";
 
-/** Women's doubles, men's doubles, or anything with both. */
+/** Women's, men's, mixed (2 women + 2 men), or anything else ("jumbled"). */
 export const matchKind = (match: Match): MatchKind => {
   const women = countFemales([...match.teamA.players, ...match.teamB.players]);
   if (women === 4) return "female";
-  return women === 0 ? "male" : "mixed";
+  if (women === 0) return "male";
+  return women === 2 ? "mixed" : "jumbled";
 };
 
 const generateOnce = (
