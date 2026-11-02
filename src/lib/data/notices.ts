@@ -75,6 +75,15 @@ export const notices: Notice[] = [
     author: "관리자",
     important: true,
   },
+  {
+    id: 9,
+    title: "[공지] 운영진 역할 변경 안내 (제8조)",
+    content:
+      "운영진 역할을 8개에서 5개로 정리했습니다. 대진표·장비 관리 담당은 폐지하고, 재정 관리 담당은 총무로 통합합니다. 이번 담당자도 함께 안내합니다.",
+    date: "2026-11-02",
+    author: "관리자",
+    important: true,
+  },
 ];
 
 export function getNoticeById(id: number): Notice | undefined {
