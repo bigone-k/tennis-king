@@ -84,6 +84,15 @@ export const notices: Notice[] = [
     author: "관리자",
     important: true,
   },
+  {
+    id: 10,
+    title: "[제안] 연간 회비 예산안 및 운영진 베네핏 안",
+    content:
+      "월 회비 6만원 기준 연간 입금과 고정 지출(코트비·캔볼), 운영진 베네핏 세 가지 안을 정리했습니다. 회원 12·15·18·20명일 때 예상 유보금도 함께 안내합니다.",
+    date: "2026-11-09",
+    author: "관리자",
+    important: true,
+  },
 ];
 
 export function getNoticeById(id: number): Notice | undefined {
