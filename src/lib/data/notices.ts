@@ -93,6 +93,14 @@ export const notices: Notice[] = [
     author: "관리자",
     important: true,
   },
+  {
+    id: 11,
+    title: "[공지] ATP 점수 기록 기능 안내",
+    content:
+      "대진표 생성기에서 경기 종료 후 ATP 점수를 기록·삭제하는 방법과, 유용한기능의 ATP 순위 확인에서 연도별 순위를 보는 방법을 안내합니다.",
+    date: "2026-11-15",
+    author: "관리자",
+  },
 ];
 
 export function getNoticeById(id: number): Notice | undefined {
