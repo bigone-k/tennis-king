@@ -168,7 +168,10 @@ export async function POST(request: Request) {
       );
     }
 
-    const bracket = generateBracket(selected, current.gamesPerPlayer);
+    const bracket = {
+      ...generateBracket(selected, current.gamesPerPlayer),
+      generatedAt: new Date().toISOString(),
+    };
     const saved = await writeSession(expectedVersion, {
       guests: current.guests,
       selectedIds: current.selectedIds,

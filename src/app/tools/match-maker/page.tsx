@@ -9,15 +9,17 @@ import {
   NTRP_OPTIONS,
   parseNtrp,
   teamNtrp,
-  type BracketResult,
   type Match,
   type MatchKind,
   type Player,
 } from "@/lib/match-maker";
+import {
+  computeRankings,
+  getWinner,
+  type Ranking,
+} from "@/lib/match-ranking";
 import type { MatchScore } from "@/lib/match-session";
 import { useMatchSession, type SyncStatus } from "@/lib/use-match-session";
-
-type Winner = "A" | "B" | null;
 
 const MATCH_KIND_LABEL: Record<
   MatchKind,
@@ -31,13 +33,6 @@ const MATCH_KIND_LABEL: Record<
 
 /** 2.5 → "2.5", 2 → "2.0" — ratings always read as one decimal. */
 const formatNtrp = (value: number): string => value.toFixed(1);
-
-const getWinner = (s?: MatchScore): Winner => {
-  if (!s) return null;
-  if (s.scoreA > s.scoreB) return "A";
-  if (s.scoreB > s.scoreA) return "B";
-  return null;
-};
 
 /* Dramatic overlay timing (ms). Sum of per-phase durations must equal OVERLAY_TOTAL_MS. */
 const PHASE_READY_MS = 550;
@@ -536,6 +531,7 @@ export default function MatchMakerPage() {
       {showFinal && bracket && (
         <FinalRankingModal
           ranked={computeRankings(bracket, scores)}
+          generatedAt={bracket.generatedAt}
           onClose={() => setShowFinal(false)}
         />
       )}
@@ -771,69 +767,6 @@ function TeamPanel({
     </div>
   );
 }
-
-interface Ranking {
-  name: string;
-  wins: number;
-  losses: number;
-  pointsFor: number;
-  pointsAgainst: number;
-}
-
-const computeRankings = (
-  bracket: BracketResult,
-  scores: Record<number, MatchScore>,
-): Ranking[] => {
-  const tallies: Record<string, Ranking> = {};
-  const init = (p: Player) => {
-    tallies[p.id] ??= {
-      name: p.name,
-      wins: 0,
-      losses: 0,
-      pointsFor: 0,
-      pointsAgainst: 0,
-    };
-  };
-
-  for (const m of bracket.matches) {
-    for (const p of m.teamA.players) init(p);
-    for (const p of m.teamB.players) init(p);
-
-    const s = scores[m.index];
-    if (!s) continue;
-
-    for (const p of m.teamA.players) {
-      tallies[p.id].pointsFor += s.scoreA;
-      tallies[p.id].pointsAgainst += s.scoreB;
-    }
-    for (const p of m.teamB.players) {
-      tallies[p.id].pointsFor += s.scoreB;
-      tallies[p.id].pointsAgainst += s.scoreA;
-    }
-
-    const w = getWinner(s);
-    if (!w) continue;
-    const winTeam = w === "A" ? m.teamA.players : m.teamB.players;
-    const loseTeam = w === "A" ? m.teamB.players : m.teamA.players;
-    for (const p of winTeam) tallies[p.id].wins += 1;
-    for (const p of loseTeam) tallies[p.id].losses += 1;
-  }
-
-  return Object.values(tallies).sort((a, b) => {
-    // 1) 득실차 높은 순
-    const pdA = a.pointsFor - a.pointsAgainst;
-    const pdB = b.pointsFor - b.pointsAgainst;
-    if (pdB !== pdA) return pdB - pdA;
-    // 2) 승-패 차이 높은 순
-    const wdA = a.wins - a.losses;
-    const wdB = b.wins - b.losses;
-    if (wdB !== wdA) return wdB - wdA;
-    // 3) 득점+실점 큰 순
-    return (
-      b.pointsFor + b.pointsAgainst - (a.pointsFor + a.pointsAgainst)
-    );
-  });
-};
 
 function MatchSummary({ ranked }: { ranked: Ranking[] }) {
   return (
@@ -1303,13 +1236,61 @@ const CONFETTI_COLORS = [
   "#f472b6", // pink
 ];
 
+type AtpAction = "create" | "delete";
+
 function FinalRankingModal({
   ranked,
+  generatedAt,
   onClose,
 }: {
   ranked: Ranking[];
+  generatedAt?: string;
   onClose: () => void;
 }) {
+  const [atpBusy, setAtpBusy] = useState<AtpAction | null>(null);
+  const [atpMessage, setAtpMessage] = useState<{
+    ok: boolean;
+    text: string;
+  } | null>(null);
+
+  const runAtp = async (action: AtpAction) => {
+    if (
+      action === "delete" &&
+      !window.confirm("이 대진표의 ATP 점수 기록을 삭제할까요?")
+    ) {
+      return;
+    }
+    setAtpBusy(action);
+    setAtpMessage(null);
+    try {
+      const response = await fetch("/api/atp", {
+        method: action === "create" ? "POST" : "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ generatedAt: generatedAt ?? null }),
+      });
+      if (!response.ok) {
+        const body = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        throw new Error(body?.error ?? `요청 실패 (${response.status})`);
+      }
+      setAtpMessage({
+        ok: true,
+        text:
+          action === "create"
+            ? "ATP 점수를 기록했습니다."
+            : "ATP 점수 기록을 삭제했습니다.",
+      });
+    } catch (e) {
+      setAtpMessage({
+        ok: false,
+        text: e instanceof Error ? e.message : "알 수 없는 오류",
+      });
+    } finally {
+      setAtpBusy(null);
+    }
+  };
+
   // Reveal step:
   //  0 = intro title only
   //  1 = 4+ 위 rest list slides in
@@ -1523,8 +1504,32 @@ function FinalRankingModal({
           </div>
         )}
 
-        {/* Footer close */}
-        <div className="mt-8 flex justify-center">
+        {/* Footer: ATP record actions + close */}
+        {atpMessage && (
+          <p
+            role="status"
+            className={`mt-6 text-center text-sm font-semibold ${
+              atpMessage.ok ? "text-emerald-300" : "text-red-300"
+            }`}
+          >
+            {atpMessage.text}
+          </p>
+        )}
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          <button
+            onClick={() => runAtp("create")}
+            disabled={atpBusy !== null}
+            className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-slate-900 text-sm font-bold transition-colors"
+          >
+            {atpBusy === "create" ? "기록 중..." : "ATP 점수 기록 생성"}
+          </button>
+          <button
+            onClick={() => runAtp("delete")}
+            disabled={atpBusy !== null}
+            className="px-5 py-2.5 rounded-xl bg-red-500/20 hover:bg-red-500/30 disabled:opacity-50 text-red-200 text-sm font-bold transition-colors border border-red-400/30"
+          >
+            {atpBusy === "delete" ? "삭제 중..." : "ATP 점수 기록 삭제"}
+          </button>
           <button
             onClick={onClose}
             className="px-8 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-bold transition-colors border border-white/20"

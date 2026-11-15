@@ -61,6 +61,29 @@ export const redisGet = (key: string): Promise<string | null> =>
 export const redisDel = (key: string): Promise<number> =>
   command<number>(["DEL", key]);
 
+/** Sets the field only if it does not exist. Resolves 1 when set, 0 when it already existed. */
+export const redisHsetnx = (
+  key: string,
+  field: string,
+  value: string,
+): Promise<number> => command<number>(["HSETNX", key, field, value]);
+
+/** Resolves the number of fields removed (0 when the field did not exist). */
+export const redisHdel = (key: string, field: string): Promise<number> =>
+  command<number>(["HDEL", key, field]);
+
+/** Upstash returns HGETALL as a flat [field, value, field, value, ...] array. */
+export const redisHgetall = async (
+  key: string,
+): Promise<Record<string, string>> => {
+  const flat = (await command<string[] | null>(["HGETALL", key])) ?? [];
+  const result: Record<string, string> = {};
+  for (let i = 0; i + 1 < flat.length; i += 2) {
+    result[flat[i]] = flat[i + 1];
+  }
+  return result;
+};
+
 export const redisEval = (
   script: string,
   keys: string[],

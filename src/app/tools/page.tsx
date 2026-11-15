@@ -8,6 +8,13 @@ const tools = [
     icon: "🎾",
     external: false,
   },
+  {
+    title: "ATP 순위 확인",
+    description: "회원별 올해 ATP 점수 순위와 연도별 1~3위를 확인합니다",
+    href: "/tools/atp",
+    icon: "🏆",
+    external: false,
+  },
 ];
 
 export default function ToolsPage() {

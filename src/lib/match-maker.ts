@@ -46,6 +46,12 @@ export interface BracketResult {
   gamesPerPlayer: number;
   requestedGamesPerPlayer: number;
   playerGameCounts: Record<string, number>;
+  /**
+   * ISO timestamp stamped by the server when the bracket is generated. Identifies
+   * the bracket for ATP records (one record per bracket). Absent on brackets
+   * generated before this field existed.
+   */
+  generatedAt?: string;
 }
 
 interface PickContext {

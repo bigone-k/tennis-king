@@ -133,6 +133,7 @@ const parseBracket = (value: unknown): BracketResult | null => {
       typeof b.playerGameCounts === "object" && b.playerGameCounts !== null
         ? (b.playerGameCounts as Record<string, number>)
         : {},
+    ...(typeof b.generatedAt === "string" ? { generatedAt: b.generatedAt } : {}),
   };
 };
 
