@@ -37,7 +37,9 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
+  // api/cron/ is excluded: Vercel Cron has no session cookie and never follows
+  // redirects. Those handlers authenticate with CRON_SECRET themselves.
   matcher: [
-    "/((?!gate|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpe?g|svg|ico|webp|gif)$).*)",
+    "/((?!gate|api/cron/|_next/static|_next/image|favicon.ico|.*\\.(?:png|jpe?g|svg|ico|webp|gif)$).*)",
   ],
 };
