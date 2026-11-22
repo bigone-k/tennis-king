@@ -1,4 +1,54 @@
 {
   "version": 1,
-  "records": []
+  "records": [
+    {
+      "bracketGeneratedAt": "2026-11-22T02:27:50.907Z",
+      "year": 2026,
+      "recordedAt": "2026-11-22T04:31:18.531Z",
+      "entries": [
+        {
+          "memberNo": 1,
+          "name": "최복수",
+          "rank": 1,
+          "points": 250
+        },
+        {
+          "memberNo": 5,
+          "name": "박주영",
+          "rank": 2,
+          "points": 150
+        },
+        {
+          "memberNo": 4,
+          "name": "정윤영",
+          "rank": 3,
+          "points": 90
+        },
+        {
+          "memberNo": 7,
+          "name": "김미란",
+          "rank": 4,
+          "points": 30
+        },
+        {
+          "memberNo": 11,
+          "name": "이덕수",
+          "rank": 5,
+          "points": 30
+        },
+        {
+          "memberNo": 10,
+          "name": "류호정",
+          "rank": 6,
+          "points": 30
+        },
+        {
+          "memberNo": 12,
+          "name": "송성헌",
+          "rank": 7,
+          "points": 30
+        }
+      ]
+    }
+  ]
 }
